@@ -1,1 +1,1 @@
-export default { base: '/opengov-privacy-app/' }  // Repo-Name
+export default { base: '/opengov-privacy-app/' }  // Repo-Name - opengov-privacy-app/
