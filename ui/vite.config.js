@@ -1,12 +1,13 @@
 import { defineConfig } from 'vite'
-import path from 'path'
+import react from '@vitejs/plugin-react'
 
+// keine __dirname-Magie nötig; alias mit Root-Pfad
 export default defineConfig({
-  base: '/opengov-privacy-app/', // GH Pages: repo name; on your server use '/',
-  plugins: [react()],
+  base: '/opengov-privacy-app/',   // bei GH Pages = Repo-Name; sonst '/'
+  plugins: [react()],               // ← WICHTIG: mit Klammern aufrufen!
   resolve: {
     alias: {
-      '@': path.resolve(__dirname, 'src')
+      '@': '/src'                   // alias für "@/..." → "ui/src"
     }
   }
 })
