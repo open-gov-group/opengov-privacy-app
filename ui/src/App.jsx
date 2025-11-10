@@ -1,5 +1,15 @@
 import React, { useEffect, useState } from "react";
-import * as yaml from "js-yaml";
+import { Card, CardContent } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
+import { Badge } from "@/components/ui/badge"
+import { Progress } from "@/components/ui/progress"
+import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/components/ui/accordion"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import { Loader2, Upload, FileText, Link2, ShieldCheck, Book, GitBranch, Wrench } from "lucide-react"
+import * as yaml from "js-yaml"
 
 export default function App() {
   const urlParam = (key, fallback) => new URLSearchParams(window.location.search).get(key) || fallback;
