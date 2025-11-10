@@ -1,5 +1,4 @@
 name: Deploy UI (GitHub Pages)
-
 on:
   push:
     branches: [ main ]
@@ -14,17 +13,26 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: ui   # <- anpassen: "." wenn UI im Repo-Root liegt
+        working-directory: ui       # anpassen, falls UI im Root liegt
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
+      # Ohne Cache, falls KEIN package-lock.json vorhanden ist
+      - name: Setup Node (no cache)
+        if: ${{ hashFiles('ui/package-lock.json') == '' }}
+        uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: 'npm'
-          cache-dependency-path: ui/package-lock.json  # anpassen/entfernen wenn kein ui/
 
-      # ⬇️ HIER das Snippet: erst ci, falls Lockfile vorhanden; sonst install
+      # Mit Cache, falls Lockfile existiert
+      - name: Setup Node (with npm cache)
+        if: ${{ hashFiles('ui/package-lock.json') != '' }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+
       - name: Install deps
         run: |
           if [ -f package-lock.json ]; then
@@ -38,14 +46,11 @@ jobs:
 
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: ui/dist  # anpassen: "dist" wenn im Root gebaut wird
+          path: ui/dist   # ggf. zu "dist" ändern, wenn kein ui/ Unterordner
 
   deploy:
     needs: build
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - id: deployment
         uses: actions/deploy-pages@v4
