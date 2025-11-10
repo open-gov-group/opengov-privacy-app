@@ -1,0 +1,1 @@
+export default { base: '/opengov-privacy-app/' }  // Repo-Name
