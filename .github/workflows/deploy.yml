@@ -1,19 +1,51 @@
-name: Deploy UI
-on: { push: { branches: [ main ] } }
+name: Deploy UI (GitHub Pages)
+
+on:
+  push:
+    branches: [ main ]
+
+permissions:
+  pages: write
+  id-token: write
+  contents: read
+
 jobs:
   build:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ui   # <- anpassen: "." wenn UI im Repo-Root liegt
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-node@v4
-        with: { node-version: 20 }
-      - run: npm ci
-      - run: npm run build
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: ui/package-lock.json  # anpassen/entfernen wenn kein ui/
+
+      # ⬇️ HIER das Snippet: erst ci, falls Lockfile vorhanden; sonst install
+      - name: Install deps
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci --no-audit --no-fund
+          else
+            npm install --no-audit --no-fund
+          fi
+
+      - name: Build
+        run: npm run build
+
       - uses: actions/upload-pages-artifact@v3
-        with: { path: dist }
+        with:
+          path: ui/dist  # anpassen: "dist" wenn im Root gebaut wird
+
   deploy:
     needs: build
-    permissions: { pages: write, id-token: write }
     runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - uses: actions/deploy-pages@v4
+      - id: deployment
+        uses: actions/deploy-pages@v4

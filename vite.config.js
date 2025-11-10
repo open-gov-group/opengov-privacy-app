@@ -1,1 +1,4 @@
-export default { base: '/opengov-privacy-app/' }  // Repo-Name - opengov-privacy-app/
+import { defineConfig } from 'vite';
+export default defineConfig({
+  base: '/opengov-privacy-app/' // bei GH Pages = Repo-Name; bei eigenem Server meist '/'
+});
