@@ -1,0 +1,20 @@
+# Node
+node_modules/
+npm-debug.log*
+yarn-error.log*
+.pnpm-store/
+
+# Vite/Build
+dist/
+vite.svg
+*.local
+
+# OS/Editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# If UI is in subfolder
+ui/node_modules/
+ui/dist/
