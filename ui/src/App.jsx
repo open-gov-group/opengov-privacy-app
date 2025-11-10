@@ -40,7 +40,9 @@ export default function App() {
   return (
     <div style={{fontFamily:"ui-sans-serif,system-ui", padding:"16px", maxWidth: "1100px", margin:"0 auto"}}>
       <h1 style={{fontSize:"20px", fontWeight:"700"}}>OpenGov Privacy – Reader (Minimal)</h1>
-
+      <div className="inline-block rounded-full bg-slate-900 text-white px-3 py-1 text-xs mb-2">
+          Tailwind active ✓
+      </div>
       <div style={{display:"grid", gap:"8px", gridTemplateColumns:"1fr 1fr", marginTop:"12px"}}>
         <input value={sspUrl} onChange={e=>setSspUrl(e.target.value)} placeholder="SSP URL" />
         <input value={poamUrl} onChange={e=>setPoamUrl(e.target.value)} placeholder="POA&M URL (optional)" />
