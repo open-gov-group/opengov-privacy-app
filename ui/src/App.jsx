@@ -1,109 +1,319 @@
-import React, { useEffect, useState } from "react";
-import { Card, CardContent } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Textarea } from "@/components/ui/textarea"
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
-import { Badge } from "@/components/ui/badge"
-import { Progress } from "@/components/ui/progress"
-import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/components/ui/accordion"
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
-import { Loader2, Upload, FileText, Link2, ShieldCheck, Book, GitBranch, Wrench } from "lucide-react"
-import * as yaml from "js-yaml"
+import React, { useEffect, useMemo, useState } from "react";
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Badge } from "@/components/ui/badge";
+import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/components/ui/accordion";
+import { Progress } from "@/components/ui/progress";
+import { ShieldCheck, Loader2, FileText, Upload, Link2, Wrench, Book } from "lucide-react";
+import * as yaml from "js-yaml";
+
+const dig = (o, p, d=undefined) => p.split(".").reduce((a,k)=> (a&&k in a?a[k]:undefined), o) ?? d;
 
 export default function App() {
-  const urlParam = (key, fallback) => new URLSearchParams(window.location.search).get(key) || fallback;
-  const [sspUrl, setSspUrl]   = useState(urlParam("ssp", "https://raw.githubusercontent.com/open-gov-group/opengov-privacy-oscal/main/oscal/ssp/ssp_template_ropa_full.json"));
-  const [poamUrl, setPoamUrl] = useState(urlParam("poam","https://raw.githubusercontent.com/open-gov-group/opengov-privacy-oscal/main/oscal/poam/poam_template.json"));
-  const [ssp, setSsp]   = useState(null);
+  const qp = new URLSearchParams(window.location.search);
+  const [sspUrl, setSspUrl]   = useState(qp.get("ssp")  || "https://raw.githubusercontent.com/open-gov-group/opengov-privacy-oscal/main/oscal/ssp/ssp_template_ropa_full.json");
+  const [poamUrl, setPoamUrl] = useState(qp.get("poam") || "https://raw.githubusercontent.com/open-gov-group/opengov-privacy-oscal/main/oscal/poam/poam_template.json");
+
+  const [ssp, setSsp] = useState(null);
   const [poam, setPoam] = useState(null);
-  const [err, setErr]   = useState("");
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState("");
 
-  async function load() {
-    setErr("");
+  // Evidence form
+  const [evTitle, setEvTitle] = useState("");
+  const [evHref, setEvHref] = useState("");
+  const [evMedia, setEvMedia] = useState("application/pdf");
+  const [evHash, setEvHash] = useState("");
+  const [evAlg, setEvAlg] = useState("sha256");
+  const [targetStmt, setTargetStmt] = useState("");
+  const [attachStmt, setAttachStmt] = useState(false);
+
+  const fetchJson = async (u) => {
+    const r = await fetch(u, { cache:"no-store" });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    return r.json();
+  };
+
+  const load = async () => {
+    setErr(""); setLoading(true);
     try {
-      const s = await fetch(sspUrl, {cache:"no-store"}).then(r=>r.json());
-      setSsp(s);
-      try {
-        const p = await fetch(poamUrl, {cache:"no-store"}).then(r=>r.json());
-        setPoam(p);
-      } catch { setPoam(null); }
-    } catch(e){ setErr(String(e)); }
-  }
+      const [s, p] = await Promise.all([
+        fetchJson(sspUrl),
+        fetchJson(poamUrl).catch(()=>null)
+      ]);
+      setSsp(s); setPoam(p);
+    } catch (e) { setErr(String(e.message||e)); }
+    finally { setLoading(false); }
+  };
 
-  useEffect(() => { load(); }, []); // eslint-disable-line
+  useEffect(()=>{ load(); /* eslint-disable-next-line */ },[]);
 
-  const implReqs = ssp?.["system-security-plan"]?.["control-implementation"]?.["implemented-requirements"] ?? [];
-  const comps = ssp?.["system-security-plan"]?.["system-implementation"]?.["components"] ?? [];
-  const bm = ssp?.["system-security-plan"]?.["back-matter"]?.["resources"] ?? [];
+  const sspMeta = dig(ssp, "system-security-plan.metadata", {});
+  const implReqs = dig(ssp, "system-security-plan.control-implementation.implemented-requirements", []) || [];
+  const components = dig(ssp, "system-security-plan.system-implementation.components", []) || [];
+  const bm = dig(ssp, "system-security-plan.back-matter.resources", []) || [];
+
+  const statements = useMemo(()=>implReqs.flatMap(ir => (ir.statements||[]).map(s => ({...s, controlId: ir["control-id"]}))), [implReqs]);
+
+  const addEvidence = () => {
+    if (!ssp || !evHref) return;
+    const next = structuredClone(ssp);
+    const bm = (next["system-security-plan"]["back-matter"] ||= {});
+    const resources = (bm["resources"] ||= []);
+    const uuid = "res-" + (crypto.randomUUID?.() || Math.random().toString(16).slice(2));
+    const res = { uuid, title: evTitle || "Evidence", rlinks: [{ href: evHref, "media-type": evMedia }] };
+    if (evHash) res.hashes = [{ algorithm: evAlg, value: evHash }];
+    resources.push(res);
+
+    if (attachStmt && targetStmt) {
+      for (const ir of next["system-security-plan"]["control-implementation"]["implemented-requirements"]) {
+        for (const st of (ir.statements || [])) {
+          if (st["statement-id"] === targetStmt) {
+            st["related-resources"] = [ ...(st["related-resources"] || []), { "resource-uuid": uuid } ];
+          }
+        }
+      }
+    }
+
+    next["system-security-plan"].metadata["last-modified"] = new Date().toISOString();
+    setSsp(next);
+    setEvTitle(""); setEvHref(""); setEvHash("");
+  };
+
+  const downloadJson = (obj, name) => {
+    const url = URL.createObjectURL(new Blob([JSON.stringify(obj, null, 2)], {type:"application/json"}));
+    const a = document.createElement("a"); a.href = url; a.download = name; a.click();
+    URL.revokeObjectURL(url);
+  };
 
   return (
-    <div style={{fontFamily:"ui-sans-serif,system-ui", padding:"16px", maxWidth: "1100px", margin:"0 auto"}}>
-      <h1 style={{fontSize:"20px", fontWeight:"700"}}>OpenGov Privacy – Reader (Minimal)</h1>
-      <div className="inline-block rounded-full bg-slate-900 text-white px-3 py-1 text-xs mb-2">
-          Tailwind active ✓
+    <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white p-6">
+      <div className="max-w-6xl mx-auto space-y-6">
+        <header className="flex items-center justify-between">
+          <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
+            <ShieldCheck className="w-6 h-6" /> OpenGov Privacy — Reader & Uploader
+          </h1>
+          <div className="text-xs text-slate-500 flex items-center gap-2"><Book className="w-4 h-4"/> OSCAL 1.1.2</div>
+        </header>
+
+        <Card className="shadow-sm">
+          <CardContent className="p-4 grid md:grid-cols-2 gap-3">
+            <div>
+              <div className="text-xs font-medium text-slate-500">SSP JSON URL</div>
+              <Input value={sspUrl} onChange={e=>setSspUrl(e.target.value)} placeholder="https://.../ssp.json" />
+            </div>
+            <div>
+              <div className="text-xs font-medium text-slate-500">POA&M JSON URL (optional)</div>
+              <Input value={poamUrl} onChange={e=>setPoamUrl(e.target.value)} placeholder="https://.../poam.json" />
+            </div>
+            <div className="md:col-span-2 flex gap-2">
+              <Button onClick={load} disabled={loading}>
+                {loading ? <Loader2 className="w-4 h-4 mr-2 animate-spin"/> : <FileText className="w-4 h-4 mr-2"/>}
+                Load
+              </Button>
+              {ssp && (
+                <Button variant="secondary" onClick={()=>downloadJson(ssp, "ssp_updated.json")}>
+                  Download updated SSP
+                </Button>
+              )}
+            </div>
+            {err && <div className="md:col-span-2 text-sm text-rose-600">{err}</div>}
+          </CardContent>
+        </Card>
+
+        <Tabs defaultValue="ssp">
+          <TabsList className="mb-3">
+            <TabsTrigger value="ssp">SSP</TabsTrigger>
+            <TabsTrigger value="poam">POA&M</TabsTrigger>
+            <TabsTrigger value="evidence">Evidence Uploader</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="ssp">
+            <Card className="shadow-sm">
+              <CardContent className="p-5 space-y-4">
+                {!ssp ? <div className="text-slate-500 text-sm">Load an SSP JSON to view details.</div> : (
+                  <>
+                    <div className="flex flex-wrap items-center gap-3">
+                      <div className="text-xl font-semibold">{sspMeta.title || "SSP"}</div>
+                      <Badge variant="secondary">v{sspMeta.version || "-"}</Badge>
+                      <Badge>{dig(ssp, "system-security-plan.metadata.oscal-version", "1.1.2")}</Badge>
+                    </div>
+
+                    <div className="grid md:grid-cols-3 gap-4">
+                      <InfoTile title="Implemented controls" value={`${implReqs.length}`} subtitle="implemented-requirements" />
+                      <InfoTile title="Components" value={`${components.length}`} />
+                      <InfoTile title="Last modified" value={new Date(sspMeta["last-modified"] || Date.now()).toLocaleString()} />
+                    </div>
+
+                    <Section title="Components">
+                      <div className="grid md:grid-cols-2 gap-3">
+                        {components.map(c=>(
+                          <Card key={c.uuid} className="border rounded-2xl">
+                            <CardContent className="p-4">
+                              <div className="font-medium">{c.title} <span className="text-xs text-slate-500">({c.type})</span></div>
+                              <div className="text-sm text-slate-600">{c.description}</div>
+                              <div className="text-xs text-slate-500 mt-1">uuid: {c.uuid}</div>
+                              <Badge className="mt-2" variant="outline">{dig(c,"status.state","unknown")}</Badge>
+                            </CardContent>
+                          </Card>
+                        ))}
+                      </div>
+                    </Section>
+
+                    <Section title="Implemented requirements">
+                      <Accordion type="multiple" className="w-full">
+                        {implReqs.map(ir=>(
+                          <AccordionItem key={ir.uuid || ir["control-id"]} value={ir.uuid || ir["control-id"]}>
+                            <AccordionTrigger>
+                              <div className="flex items-center gap-2">
+                                <Badge variant="secondary">{ir["control-id"]}</Badge>
+                                <span className="font-medium">Statements: {(ir.statements||[]).length}</span>
+                              </div>
+                            </AccordionTrigger>
+                            <AccordionContent>
+                              <div className="space-y-3">
+                                {(ir.statements||[]).map(s=>(
+                                  <Card key={s.uuid || s["statement-id"]}>
+                                    <CardContent className="p-4 space-y-2">
+                                      <div className="flex items-center gap-2">
+                                        <Badge>{s["statement-id"]}</Badge>
+                                        {s.description && <span className="text-sm text-slate-600">{s.description}</span>}
+                                      </div>
+                                      {(s["by-components"]||[]).length>0 && (
+                                        <div className="text-sm">
+                                          <div className="font-medium mb-1">by-components</div>
+                                          <ul className="list-disc ml-5 space-y-1">
+                                            {s["by-components"].map((bc,i)=>(
+                                              <li key={bc.uuid || i}><code className="text-xs">{bc["component-uuid"]}</code>: {bc.description}</li>
+                                            ))}
+                                          </ul>
+                                        </div>
+                                      )}
+                                      {(s["related-resources"]||[]).length>0 && (
+                                        <div className="text-sm">
+                                          <div className="font-medium mb-1">related-resources</div>
+                                          <ul className="list-disc ml-5 space-y-1">
+                                            {s["related-resources"].map((rr,i)=>(
+                                              <li key={i}><code className="text-xs">{rr["resource-uuid"]}</code></li>
+                                            ))}
+                                          </ul>
+                                        </div>
+                                      )}
+                                    </CardContent>
+                                  </Card>
+                                ))}
+                              </div>
+                            </AccordionContent>
+                          </AccordionItem>
+                        ))}
+                      </Accordion>
+                    </Section>
+                  </>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="poam">
+            <Card className="shadow-sm">
+              <CardContent className="p-5 space-y-4">
+                {!poam ? <div className="text-slate-500 text-sm">Load a POA&M JSON to view items.</div> : (
+                  <div className="grid md:grid-cols-2 gap-3">
+                    {(dig(poam,"plan-of-action-and-milestones.poam-items",[])||[]).map(it=>(
+                      <Card key={it.uuid}>
+                        <CardContent className="p-4 space-y-1">
+                          <div className="flex items-center justify-between">
+                            <div className="font-medium">{it.title}</div>
+                            <Badge>{it.status || "planned"}</Badge>
+                          </div>
+                          <div className="text-sm text-slate-600">{it.description}</div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="evidence">
+            <Card className="shadow-sm">
+              <CardContent className="p-5 space-y-4">
+                {!ssp ? <div className="text-slate-500 text-sm">Load an SSP to attach evidence.</div> : (
+                  <div className="grid md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <div className="font-medium">New Evidence (back-matter resource)</div>
+                      <div className="text-xs">Title</div>
+                      <Input value={evTitle} onChange={e=>setEvTitle(e.target.value)} placeholder="e.g., Backup Policy" />
+                      <div className="text-xs">URL (href)</div>
+                      <Input value={evHref} onChange={e=>setEvHref(e.target.value)} placeholder="https://..." />
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <div className="text-xs">Media-Type</div>
+                          <Input value={evMedia} onChange={e=>setEvMedia(e.target.value)} placeholder="application/pdf" />
+                        </div>
+                        <div>
+                          <div className="text-xs">Hash Algorithm</div>
+                          <Input value={evAlg} onChange={e=>setEvAlg(e.target.value)} placeholder="sha256" />
+                        </div>
+                      </div>
+                      <div className="text-xs">Hash Value (optional)</div>
+                      <Input value={evHash} onChange={e=>setEvHash(e.target.value)} placeholder="abcdef..." />
+
+                      <div className="flex items-center gap-2 mt-2">
+                        <input id="attach" type="checkbox" checked={attachStmt} onChange={e=>setAttachStmt(e.target.checked)} />
+                        <label htmlFor="attach" className="text-sm">Also attach to statement</label>
+                      </div>
+                      {attachStmt && (
+                        <select className="border rounded-md px-2 py-1 w-full" value={targetStmt} onChange={e=>setTargetStmt(e.target.value)}>
+                          <option value="">Select statement-id…</option>
+                          {statements.map(s=>(
+                            <option key={s["statement-id"]} value={s["statement-id"]}>{s["statement-id"]} ({s.controlId})</option>
+                          ))}
+                        </select>
+                      )}
+
+                      <Button className="mt-2" onClick={addEvidence} disabled={!evHref}>
+                        <Upload className="w-4 h-4 mr-2" /> Add Evidence
+                      </Button>
+                    </div>
+
+                    <div className="space-y-2">
+                      <div className="font-medium">Back-matter Preview</div>
+                      <pre className="bg-slate-900 text-slate-100 text-xs rounded-xl p-3 overflow-auto max-h-96">
+                        {JSON.stringify(bm, null, 2)}
+                      </pre>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
       </div>
-      <div style={{display:"grid", gap:"8px", gridTemplateColumns:"1fr 1fr", marginTop:"12px"}}>
-        <input value={sspUrl} onChange={e=>setSspUrl(e.target.value)} placeholder="SSP URL" />
-        <input value={poamUrl} onChange={e=>setPoamUrl(e.target.value)} placeholder="POA&M URL (optional)" />
-      </div>
-      <button onClick={load} style={{marginTop:"8px", padding:"8px 12px"}}>Load</button>
-      {err && <div style={{color:"#b91c1c", marginTop:"8px"}}>{err}</div>}
-
-      {ssp && (
-        <>
-          <h2 style={{marginTop:"16px"}}>SSP</h2>
-          <div style={{display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:"8px"}}>
-            <Tile title="Implemented controls" value={implReqs.length} />
-            <Tile title="Components" value={comps.length} />
-            <Tile title="Back-matter resources" value={bm.length} />
-          </div>
-
-          <h3 style={{marginTop:"12px"}}>Components</h3>
-          <ul>
-            {comps.map(c => <li key={c.uuid}><code>{c.uuid}</code> — {c.title} ({c.type})</li>)}
-          </ul>
-
-          <h3>Implemented requirements</h3>
-          <ul>
-            {implReqs.map(ir => (
-              <li key={ir.uuid || ir["control-id"]}>
-                <strong>{ir["control-id"]}</strong> — {ir.statements?.length ?? 0} statements
-              </li>
-            ))}
-          </ul>
-
-          <h3>Back-matter</h3>
-          <ul>
-            {bm.map(r => (
-              <li key={r.uuid}>
-                <strong>{r.title}</strong> <code>{r.uuid}</code>
-                {r.rlinks?.map((l,i)=>(<div key={i}><a href={l.href} target="_blank" rel="noreferrer">{l.href}</a> ({l["media-type"]})</div>))}
-              </li>
-            ))}
-          </ul>
-        </>
-      )}
-
-      {poam && (
-        <>
-          <h2 style={{marginTop:"16px"}}>POA&M</h2>
-          <ul>
-            {(poam["plan-of-action-and-milestones"]?.["poam-items"] ?? []).map(it=>(
-              <li key={it.uuid}><strong>{it.title}</strong> — {it.status || "planned"}</li>
-            ))}
-          </ul>
-        </>
-      )}
     </div>
   );
 }
 
-function Tile({title, value}) {
+function Section({ title, children }) {
   return (
-    <div style={{border:"1px solid #e5e7eb", borderRadius:"12px", padding:"12px"}}>
-      <div style={{fontSize:"12px", color:"#6b7280"}}>{title}</div>
-      <div style={{fontSize:"20px", fontWeight:"700"}}>{value}</div>
-    </div>
+    <section className="space-y-3">
+      <div className="text-sm font-semibold text-slate-700 flex items-center gap-2"><Wrench className="w-4 h-4"/>{title}</div>
+      {children}
+    </section>
+  );
+}
+function InfoTile({ title, value, subtitle }) {
+  return (
+    <Card className="border rounded-2xl">
+      <CardContent className="p-4">
+        <div className="text-xs text-slate-500">{title}</div>
+        <div className="text-2xl font-semibold">{value}</div>
+        {subtitle && <div className="text-xs text-slate-400">{subtitle}</div>}
+      </CardContent>
+    </Card>
   );
 }
