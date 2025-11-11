@@ -6,9 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview --port 5173",
-    "mapper:run": "node tools/run-mapper.mjs oscal/ssp/ssp_template_ropa_full.json mappings/xdomea_to_ropa.yaml fixtures/xdomea_example.json build/ssp_mapped.json",
-    "test:mapper": "node tests/mapper.smoke.mjs"
+    "preview": "vite preview --port 5173"
   },
   "dependencies": {
     "react": "^18.3.1",

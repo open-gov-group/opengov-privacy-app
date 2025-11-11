@@ -1,0 +1,12 @@
+{
+  "name": "opengov-privacy-app-root",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "js-yaml": "^4.1.0"
+  },
+  "scripts": {
+    "mapper:run": "node tools/run-mapper.mjs oscal/ssp/ssp_template_ropa_full.json mappings/xdomea_to_ropa.yaml fixtures/xdomea_example.json build/ssp_mapped.json",
+    "test:mapper": "node tests/mapper.smoke.mjs"
+  }
+}
