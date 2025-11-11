@@ -21,6 +21,25 @@ jobs:
         working-directory: ui   # <- change to "." if UI is at repo root
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      # Node for root-level tools/tests
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Mapper smoke test (repo root)
+        working-directory: .
+        run: |
+          mkdir -p build
+          node tools/run-mapper.mjs \
+            oscal/ssp/ssp_template_ropa_full.json \
+            mappings/xdomea_to_ropa.yaml \
+            fixtures/xdomea_example.json \
+            build/ssp_mapped.json
+          node tests/mapper.smoke.mjs
 
       - uses: actions/setup-node@v4
         if: ${{ hashFiles('ui/package-lock.json') != '' }}
