@@ -10,6 +10,8 @@ import { Progress } from "@/components/ui/progress";
 import { ShieldCheck, Loader2, FileText, Upload, Link2, Wrench, Book } from "lucide-react";
 import { generateIRFromProfile } from "./lib/ir-from-profile";
 import { fetchCatalogManifest } from "./lib/catalog-manifest";
+import { useI18n } from "./lib/i18n";
+import { loadRiskQualitative, loadRiskQuant } from "./lib/risk";
 import { runMapper } from "./lib/mapper";
 import { loadXdomea } from "./adapters/xdomea";
 import { loadBpmnXml } from "./adapters/bpmn";
