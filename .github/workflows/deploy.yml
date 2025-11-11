@@ -46,6 +46,13 @@ jobs:
             echo "No root package.json; skipping root install."
           fi
 
+      - name: Prepare smoke template
+        run: |
+          mkdir -p oscal/ssp
+          curl -fsSL \
+            https://raw.githubusercontent.com/open-gov-group/opengov-privacy-oscal/main/oscal/ssp/ssp_template_ropa.json \
+            -o oscal/ssp/ssp_template_ropa_full.json
+
       # Mapper smoke test at repo root
       # If js-yaml is only under ui/, you can export NODE_PATH to reuse it:
       #   env: { NODE_PATH: ${{ github.workspace }}/ui/node_modules }
