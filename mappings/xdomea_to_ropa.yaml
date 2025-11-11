@@ -1,0 +1,23 @@
+priorities: [xdomea, bpmn, vendor]
+rules:
+  - target: system-security-plan.system-characteristics.props
+    op: push
+    value:
+      name: ropa:purpose
+      value: $xdomea.Process.Purpose
+    normalize: [trim]
+    fallback:
+      name: ropa:purpose
+      value: "<unassigned>"
+
+  - target: system-security-plan.system-characteristics.props
+    op: push
+    value:
+      name: ropa:legal-basis
+      value: $xdomea.Process.LegalBasis
+    normalize:
+      - trim
+      - map:
+          "Art. 6(1)(a) GDPR": consent
+          "Art. 6(1)(b) GDPR": contract
+          "Art. 6(1)(c) GDPR": legal-obligation

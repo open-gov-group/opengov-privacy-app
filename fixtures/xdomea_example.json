@@ -1,0 +1,95 @@
+{
+  "xdomea": {
+    "Process": {
+      "Id": "AP-10.2.3",
+      "Title": "Bürgerportal: Online-Anträge",
+      "Description": "Bearbeitung von Online-Anträgen inkl. Terminvergabe und Auskunftserteilung über ein zentrales Bürgerportal.",
+      "Purpose": "Bearbeitung von Online-Anträgen; Terminvergabe; Auskunftserteilung",
+      "LegalBasis": "Art. 6(1)(c) GDPR",
+      "Controller": {
+        "Name": "Stadt Musterhausen",
+        "Department": "Bürgerbüro",
+        "ContactEmail": "buergerbuero@musterhausen.example",
+        "Address": "Rathausplatz 1, 12345 Musterhausen"
+      },
+      "DataSubjects": [
+        "Bürger:innen",
+        "Unternehmensvertreter:innen"
+      ],
+      "DataCategories": [
+        "Identitätsdaten (Name, Geburtsdatum)",
+        "Kontaktdaten (Adresse, E-Mail, Telefon)",
+        "Antragsdaten (Vorgang, Unterlagen)",
+        "Protokolldaten (Zeitstempel, technische IDs)"
+      ],
+      "Recipients": [
+        "Fachanwendung X",
+        "Kassenverfahren",
+        "Externer Druckdienstleister"
+      ],
+      "Processors": [
+        {
+          "Name": "Cloud Hosting GmbH",
+          "Role": "Auftragsverarbeiter (IaaS/PaaS)",
+          "Location": "EU (Frankfurt/Amsterdam)"
+        }
+      ],
+      "ThirdCountryTransfers": "No",
+      "DataProcessingLocation": "EU/EWR",
+      "Retention": {
+        "Policy": "10 Jahre nach Bescheiderstellung (Aktenplan VVA-2023-RET-10Y)",
+        "ScheduleId": "VVA-2023-RET-10Y",
+        "DeletionMechanism": "regelbasierte Löschung über Lösch-Engine"
+      },
+      "SecurityMeasures": {
+        "AccessControl": "RBAC; SSO (OIDC) + MFA für Administrierende",
+        "Encryption": {
+          "InTransit": "TLS 1.3",
+          "AtRest": "AES-256 (Volumes & Snapshots)"
+        },
+        "Logging": "Strukturierte Logs (JSON), WORM-Storage 365 Tage",
+        "Backup": "Täglich voll + PITR; Offsite-Kopie EU-Region; monatlicher Restore-Test"
+      },
+      "Systems": [
+        {
+          "Name": "Web/API Service",
+          "Type": "Applikation",
+          "CMDBId": "SYS-PORTAL-001"
+        },
+        {
+          "Name": "PostgreSQL",
+          "Type": "Datenbank",
+          "CMDBId": "DB-PORTAL-001"
+        },
+        {
+          "Name": "Load Balancer / CDN",
+          "Type": "Netzkomponente",
+          "CMDBId": "NET-EDGE-001"
+        }
+      ],
+      "Records": [
+        {
+          "Name": "Antragsakte digital",
+          "Classification": "personenbezogen",
+          "Location": "DMS / Fachverfahren X"
+        }
+      ],
+      "Roles": [
+        { "Id": "owner", "Title": "System Owner", "PartyRef": "dept-buergerbuero" },
+        { "Id": "iso", "Title": "Informationssicherheitsbeauftragte:r", "PartyRef": "ref-iso" },
+        { "Id": "dpo", "Title": "Datenschutzbeauftragte:r", "PartyRef": "ref-dpo" }
+      ],
+      "Evidence": [
+        {
+          "Title": "Kryptographie-Richtlinie",
+          "Href": "https://intranet.example/policies/crypto-policy-v2.pdf",
+          "MediaType": "application/pdf",
+          "Hash": {
+            "algorithm": "sha256",
+            "value": "ae7c2f9c1b2e49dfbb3a2f0e9e7ad1b41fb9b67a0ddc0b9d8b1c6c7a0f9d1122"
+          }
+        }
+      ]
+    }
+  }
+}

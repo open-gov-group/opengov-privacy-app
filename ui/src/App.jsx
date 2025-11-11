@@ -33,6 +33,17 @@ export default function App() {
   const LS_SSP = 'opgov:sspUrl';
   const LS_POAM = 'opgov:poamUrl';
 
+  const [catalogList, setCatalogList] = useState([]);
+  const [catalogSel, setCatalogSel] = useState(null);
+
+  useEffect(() => {
+    fetch("https://raw.githubusercontent.com/open-gov-group/opengov-privacy-oscal/main/oscal/catalogs.json")
+      .then(r=>r.json()).then(list => {
+        setCatalogList(list);
+        if (!catalogSel) setCatalogSel(list[0]);
+      }).catch(()=>{});
+  }, []);
+
   useEffect(() => {
     // Nur wenn keine Query-Params explizit gesetzt wurden:
     const p = new URLSearchParams(window.location.search);
@@ -48,6 +59,16 @@ export default function App() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const applySkeleton = async () => {
+    const ir = await fetch('./build/ir_skeleton.json').then(r=>r.json()).catch(()=>null);
+    if (!ssp || !ir) return;
+    const next = structuredClone(ssp);
+    next['system-security-plan']['control-implementation'] ||= {};
+    next['system-security-plan']['control-implementation']['implemented-requirements'] =
+      ir['implemented-requirements'];
+    setSsp(next);
+  };
 
 
   const fetchJson = async (u) => {
@@ -121,6 +142,18 @@ export default function App() {
             <ShieldCheck className="w-6 h-6" /> OpenGov Privacy — Reader & Uploader
           </h1>
           <div className="text-xs text-slate-500 flex items-center gap-2"><Book className="w-4 h-4"/> OSCAL 1.1.2</div>
+          {catalogList.length>0 && (
+            <div className="text-xs">
+              <label className="mr-2">Catalog:</label>
+              <select
+                className="border rounded-md px-2 py-1"
+                value={catalogSel?.id || ""}
+                onChange={(e)=> setCatalogSel(catalogList.find(x=>x.id===e.target.value))}
+              >
+                {catalogList.map(c=> <option key={c.id} value={c.id}>{c.title} {c.version}</option>)}
+              </select>
+            </div>
+          )}       
         </header>
 
         <Card className="shadow-sm">
@@ -140,6 +173,7 @@ export default function App() {
                 {loading ? <Loader2 className="w-4 h-4 mr-2 animate-spin"/> : <FileText className="w-4 h-4 mr-2"/>}
                 Load
               </Button>
+              <Button variant="secondary" onClick={applySkeleton}>Populate from profile</Button>
               {ssp && (
                 <Button variant="secondary" onClick={()=>downloadJson(ssp, "ssp_updated.json")}>
                   Download updated SSP
