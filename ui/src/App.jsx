@@ -30,10 +30,32 @@ export default function App() {
   const [evAlg, setEvAlg] = useState("sha256");
   const [targetStmt, setTargetStmt] = useState("");
   const [attachStmt, setAttachStmt] = useState(false);
+  const LS_SSP = 'opgov:sspUrl';
+  const LS_POAM = 'opgov:poamUrl';
+
+  useEffect(() => {
+    // Nur wenn keine Query-Params explizit gesetzt wurden:
+    const p = new URLSearchParams(window.location.search);
+    const sFromQP = p.get('ssp');
+    const mFromQP = p.get('poam');
+    if (!sFromQP) {
+      const s = localStorage.getItem(LS_SSP);
+      if (s) setSspUrl(s);
+    }
+    if (!mFromQP) {
+      const m = localStorage.getItem(LS_POAM);
+      if (m) setPoamUrl(m);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
 
   const fetchJson = async (u) => {
-    const r = await fetch(u, { cache:"no-store" });
-    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const r = await fetch(u, { cache: "no-store" });
+    if (!r.ok) {
+      const txt = await r.text().catch(() => '');
+      throw new Error(`HTTP ${r.status} ${r.statusText} – ${u}\n${txt?.slice(0,200)}`);
+    }
     return r.json();
   };
 
@@ -81,6 +103,8 @@ export default function App() {
     next["system-security-plan"].metadata["last-modified"] = new Date().toISOString();
     setSsp(next);
     setEvTitle(""); setEvHref(""); setEvHash("");
+    localStorage.setItem(LS_SSP, sspUrl);
+    if (poamUrl) localStorage.setItem(LS_POAM, poamUrl);
   };
 
   const downloadJson = (obj, name) => {
@@ -101,13 +125,15 @@ export default function App() {
 
         <Card className="shadow-sm">
           <CardContent className="p-4 grid md:grid-cols-2 gap-3">
-            <div>
-              <div className="text-xs font-medium text-slate-500">SSP JSON URL</div>
+
+            <div className="flex gap-2 items-center">
               <Input value={sspUrl} onChange={e=>setSspUrl(e.target.value)} placeholder="https://.../ssp.json" />
+              <a className="text-xs text-slate-600 underline" href={sspUrl} target="_blank" rel="noreferrer">open</a>
             </div>
-            <div>
-              <div className="text-xs font-medium text-slate-500">POA&M JSON URL (optional)</div>
+
+            <div className="flex gap-2 items-center">
               <Input value={poamUrl} onChange={e=>setPoamUrl(e.target.value)} placeholder="https://.../poam.json" />
+              <a className="text-xs text-slate-600 underline" href={poamUrl} target="_blank" rel="noreferrer">open</a>
             </div>
             <div className="md:col-span-2 flex gap-2">
               <Button onClick={load} disabled={loading}>
@@ -120,7 +146,18 @@ export default function App() {
                 </Button>
               )}
             </div>
-            {err && <div className="md:col-span-2 text-sm text-rose-600">{err}</div>}
+            {err && (
+              <div className="md:col-span-2 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">
+                <div className="font-medium mb-1">Fehler beim Laden</div>
+                <pre className="whitespace-pre-wrap">{err}</pre>
+                <ul className="list-disc ml-5 mt-2 text-rose-800">
+                  <li>Stimmt die URL (roh-JSON)? 404 = Pfad prüfen.</li>
+                  <li>403/401 = Zugriff/Berechtigung (Repo privat?).</li>
+                  <li>CORS-Probleme? Bei internen Hosts <code>Access-Control-Allow-Origin: *</code> setzen.</li>
+                  <li>Ist die Datei wirklich JSON und valide (nicht XML/YAML)?</li>
+                </ul>
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -218,6 +255,13 @@ export default function App() {
           </TabsContent>
 
           <TabsContent value="poam">
+            {poam && (
+              <div className="mb-3">
+                <Button variant="secondary" onClick={() => downloadJson(poam, "poam_updated.json")}>
+                  Download updated POA&M
+                </Button>
+              </div>
+            )}
             <Card className="shadow-sm">
               <CardContent className="p-5 space-y-4">
                 {!poam ? <div className="text-slate-500 text-sm">Load a POA&M JSON to view items.</div> : (
