@@ -8,6 +8,12 @@ import { Badge } from "@/components/ui/badge";
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/components/ui/accordion";
 import { Progress } from "@/components/ui/progress";
 import { ShieldCheck, Loader2, FileText, Upload, Link2, Wrench, Book } from "lucide-react";
+import { generateIRFromProfile } from "./lib/ir-from-profile";
+import { fetchCatalogManifest } from "./lib/catalog-manifest";
+import { runMapper } from "./lib/mapper";
+import { loadXdomea } from "./adapters/xdomea";
+import { loadBpmnXml } from "./adapters/bpmn";
+import { addEvidence, loadRegistry, attachEvidenceToSSP } from "./lib/evidence";
 import * as yaml from "js-yaml";
 
 const dig = (o, p, d=undefined) => p.split(".").reduce((a,k)=> (a&&k in a?a[k]:undefined), o) ?? d;
@@ -35,6 +41,18 @@ export default function App() {
 
   const [catalogList, setCatalogList] = useState([]);
   const [catalogSel, setCatalogSel] = useState(null);
+
+  const [xdomeaUrl, setXdomeaUrl] = useState("");
+  const [bpmnUrl, setBpmnUrl] = useState("");
+
+  const [eviTitle, setEviTitle] = useState("");
+  const [eviHref, setEviHref] = useState("");
+  const [eviMedia, setEviMedia] = useState("application/pdf");
+  const [eviHashAlg, setEviHashAlg] = useState("");
+  const [eviHashVal, setEviHashVal] = useState("");
+  const [eviReg, setEviReg] = useState([]);
+
+  useEffect(()=>{ setEviReg(loadRegistry()); }, []);
 
   useEffect(() => {
     fetch("https://raw.githubusercontent.com/open-gov-group/opengov-privacy-oscal/main/oscal/catalogs.json")
@@ -180,6 +198,35 @@ export default function App() {
                 </Button>
               )}
             </div>
+            <div className="grid gap-2 md:grid-cols-2">
+              <Input value={xdomeaUrl} onChange={e=>setXdomeaUrl(e.target.value)} placeholder="xdomea JSON URL (optional)" />
+              <Input value={bpmnUrl} onChange={e=>setBpmnUrl(e.target.value)} placeholder="BPMN XML URL (optional)" />
+            </div>
+            <Button
+              variant="default"
+              onClick={async () => {
+                try {
+                  if (!ssp) throw new Error("Load an SSP first.");
+                  // Load sources
+                  const sources = {};
+                  if (xdomeaUrl) sources.xdomea = await loadXdomea(xdomeaUrl);
+                  if (bpmnUrl) sources.bpmn = await loadBpmnXml(bpmnUrl);
+
+                  // Fetch YAML rules from repo (adjust if you keep them elsewhere)
+                  const rulesUrl = "https://raw.githubusercontent.com/open-gov-group/opengov-privacy-app/main/mappings/xdomea_to_ropa.yaml";
+                  const rules = await fetch(rulesUrl, { cache: "no-store" }).then(r=>r.text());
+
+                  const mapped = runMapper(ssp, rules, sources);
+                  setSsp(mapped);
+                  setErr("");
+                } catch (e) {
+                  setErr(e.message || String(e));
+                }
+              }}
+            >
+              Map from XDOMEA/BPMN
+            </Button>
+
             {err && (
               <div className="md:col-span-2 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">
                 <div className="font-medium mb-1">Fehler beim Laden</div>
@@ -366,6 +413,48 @@ export default function App() {
                       </pre>
                     </div>
                   </div>
+                )}
+              </CardContent>
+            </Card>
+            <Card className="mt-4">
+              <CardContent>
+                <div className="font-medium mb-2">Evidence</div>
+                <div className="grid gap-2 md:grid-cols-5">
+                  <Input placeholder="Title" value={eviTitle} onChange={e=>setEviTitle(e.target.value)} />
+                  <Input placeholder="Href (URL)" value={eviHref} onChange={e=>setEviHref(e.target.value)} />
+                  <Input placeholder="Media-Type" value={eviMedia} onChange={e=>setEviMedia(e.target.value)} />
+                  <Input placeholder="Hash Alg (optional)" value={eviHashAlg} onChange={e=>setEviHashAlg(e.target.value)} />
+                  <Input placeholder="Hash Value (optional)" value={eviHashVal} onChange={e=>setEviHashVal(e.target.value)} />
+                </div>
+                <div className="mt-2 flex gap-2">
+                  <Button
+                    variant="secondary"
+                    onClick={() => {
+                      const it = addEvidence({ title: eviTitle, href: eviHref, mediaType: eviMedia, hashAlg: eviHashAlg, hashVal: eviHashVal });
+                      setEviReg(loadRegistry());
+                      if (ssp) {
+                        const next = attachEvidenceToSSP(ssp, it, []); // attach to back-matter only
+                        setSsp(next);
+                      }
+                    }}
+                  >
+                    Add to registry & back-matter
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      const blob = new Blob([JSON.stringify(eviReg, null, 2)], { type: "application/json" });
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement("a");
+                      a.href = url; a.download = "evidence_registry.json"; a.click();
+                      URL.revokeObjectURL(url);
+                    }}
+                  >
+                    Download registry
+                  </Button>
+                </div>
+                {eviReg.length > 0 && (
+                  <div className="mt-3 text-xs text-slate-600">Registry items: {eviReg.length}</div>
                 )}
               </CardContent>
             </Card>
