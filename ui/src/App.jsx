@@ -9,15 +9,10 @@ import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/
 import { Progress } from "@/components/ui/progress";
 import { ShieldCheck, Loader2, FileText, Upload, Link2, Wrench, Book } from "lucide-react";
 import { generateIRFromProfile } from "./lib/ir-from-profile";
-import { fetchCatalogManifest } from "./lib/catalog-manifest";
-import { useI18n } from "./lib/i18n";
-import { loadRiskQualitative, loadRiskQuant } from "./lib/risk";
-import { runMapper } from "./lib/mapper";
-import { loadXdomea } from "./adapters/xdomea";
-import { loadBpmnXml } from "./adapters/bpmn";
-import { addEvidence, loadRegistry, attachEvidenceToSSP } from "./lib/evidence";
+
+// import { fetchCatalogManifest } from "./lib/catalog-manifest"; // keep if you want to use it
+import { addEvidence as addEvidenceToRegistry, loadRegistry, attachEvidenceToSSP } from "./lib/evidence";
 import { loadContractFromSSP, loadDefaultContract, pickProfileUrl, getBackMatterRlink } from "./lib/contract";
-import * as yaml from "js-yaml";
 
 const dig = (o, p, d=undefined) => p.split(".").reduce((a,k)=> (a&&k in a?a[k]:undefined), o) ?? d;
 
@@ -25,6 +20,9 @@ export default function App() {
   const qp = new URLSearchParams(window.location.search);
   const [sspUrl, setSspUrl]   = useState(qp.get("ssp")  || "https://raw.githubusercontent.com/open-gov-group/opengov-privacy-oscal/main/oscal/ssp/ssp_template_ropa_full.json");
   const [poamUrl, setPoamUrl] = useState(qp.get("poam") || "https://raw.githubusercontent.com/open-gov-group/opengov-privacy-oscal/main/oscal/poam/poam_template.json");
+
+  const [riskQual, setRiskQual] = useState([]);
+  const [riskQuant, setRiskQuant] = useState(null);
 
   const [ssp, setSsp] = useState(null);
   const [poam, setPoam] = useState(null);
@@ -71,16 +69,65 @@ export default function App() {
     })();
   }, [ssp]);
 
+  useEffect(() => {
+    (async () => {
+      try {
+        // risk URLs: prefer SSP back-matter, else contract
+        const qualUrl = getBackMatterRlink(ssp, "res-risk-qual") || contract?.sources?.risk?.qualitativeCsv;
+        const quantUrl = getBackMatterRlink(ssp, "res-risk-quant") || contract?.sources?.risk?.quantitativeJson;
+
+        const [qualText, quantJson] = await Promise.all([
+          qualUrl ? fetch(qualUrl, { cache: "no-store" }).then(r => r.ok ? r.text() : "") : Promise.resolve(""),
+          quantUrl ? fetch(quantUrl, { cache: "no-store" }).then(r => r.ok ? r.json() : null) : Promise.resolve(null),
+        ]);
+
+        // parse qualitative CSV (very small parser inline)
+        const qual = qualText
+          ? (() => {
+              const [header, ...rows] = qualText.trim().split(/\r?\n/);
+              const cols = header.split(",");
+              return rows.map(line => {
+                const vals = line.split(",");
+                const obj = {}; cols.forEach((c, i) => obj[c] = vals[i]); return obj;
+              });
+            })()
+          : [];
+
+        setRiskQual(qual);
+        setRiskQuant(quantJson || null);
+      } catch (e) {
+        console.warn("risk/i18n load failed:", e);
+      }
+    })();
+  }, [ssp, contract]);
+
   useEffect(()=>{ setEviReg(loadRegistry()); }, []);
 
   useEffect(() => {
-    fetch("https://raw.githubusercontent.com/open-gov-group/opengov-privacy-oscal/main/oscal/catalogs.json")
-      .then(r=>r.json()).then(list => {
+    (async () => {
+      try {
+        const list = await fetchCatalogManifest();
         setCatalogList(list);
         if (!catalogSel) setCatalogSel(list[0]);
-      }).catch(()=>{});
+      } catch {/*noop*/}
+    })();
   }, []);
 
+  useEffect(() => {
+    (async () => {
+      try {
+        const deUrl = getBackMatterRlink(ssp, "res-i18n-de") || contract?.sources?.i18n?.de;
+        const enUrl = getBackMatterRlink(ssp, "res-i18n-en") || contract?.sources?.i18n?.en;
+        // You can merge these into your existing dictionary or keep your built-ins as fallback.
+        // Example: just fetch to verify availability
+        if (deUrl) await fetch(deUrl, { cache: "no-store" });
+        if (enUrl) await fetch(enUrl, { cache: "no-store" });
+      } catch (e) {
+        console.warn("i18n load failed:", e);
+      }
+    })();
+  }, [ssp, contract]);
+ 
   useEffect(() => {
     // Nur wenn keine Query-Params explizit gesetzt wurden:
     const p = new URLSearchParams(window.location.search);
@@ -106,6 +153,7 @@ export default function App() {
       ir['implemented-requirements'];
     setSsp(next);
   };
+
 
 
   const fetchJson = async (u) => {
@@ -138,7 +186,7 @@ export default function App() {
 
   const statements = useMemo(()=>implReqs.flatMap(ir => (ir.statements||[]).map(s => ({...s, controlId: ir["control-id"]}))), [implReqs]);
 
-  const addEvidence = () => {
+  const addEvidenceToBackMatter  = () => {
     if (!ssp || !evHref) return;
     const next = structuredClone(ssp);
     const bm = (next["system-security-plan"]["back-matter"] ||= {});
@@ -161,8 +209,7 @@ export default function App() {
     next["system-security-plan"].metadata["last-modified"] = new Date().toISOString();
     setSsp(next);
     setEvTitle(""); setEvHref(""); setEvHash("");
-    localStorage.setItem(LS_SSP, sspUrl);
-    if (poamUrl) localStorage.setItem(LS_POAM, poamUrl);
+
   };
 
   const downloadJson = (obj, name) => {
@@ -210,7 +257,26 @@ export default function App() {
                 {loading ? <Loader2 className="w-4 h-4 mr-2 animate-spin"/> : <FileText className="w-4 h-4 mr-2"/>}
                 Load
               </Button>
-              <Button variant="secondary" onClick={applySkeleton}>Populate from profile</Button>
+              <Button
+                variant="secondary"
+                onClick={async () => {
+                  try {
+                    if (!ssp) throw new Error("Load an SSP first.");
+                    const profileUrl = pickProfileUrl(contract, ssp);
+                    if (!profileUrl) throw new Error("No profile URL available (contract/import-profile missing).");
+                    const ir = await generateIRFromProfile(profileUrl);
+                    const next = structuredClone(ssp);
+                    next["system-security-plan"]["control-implementation"] ||= {};
+                    next["system-security-plan"]["control-implementation"]["implemented-requirements"] = ir;
+                    setSsp(next);
+                    setErr("");
+                  } catch (e) {
+                    setErr(e.message || String(e));
+                  }
+                }}
+              >
+                Populate from profile
+              </Button>
               {ssp && (
                 <Button variant="secondary" onClick={()=>downloadJson(ssp, "ssp_updated.json")}>
                   Download updated SSP
@@ -446,7 +512,7 @@ export default function App() {
                         </select>
                       )}
 
-                      <Button className="mt-2" onClick={addEvidence} disabled={!evHref}>
+                      <Button className="mt-2" onClick={addEvidenceToBackMatter} disabled={!evHref}>
                         <Upload className="w-4 h-4 mr-2" /> Add Evidence
                       </Button>
                     </div>
@@ -475,7 +541,7 @@ export default function App() {
                   <Button
                     variant="secondary"
                     onClick={() => {
-                      const it = addEvidence({ title: eviTitle, href: eviHref, mediaType: eviMedia, hashAlg: eviHashAlg, hashVal: eviHashVal });
+                      const it = addEvidenceToRegistry({ title: eviTitle, href: eviHref, mediaType: eviMedia, hashAlg: eviHashAlg, hashVal: eviHashVal });
                       setEviReg(loadRegistry());
                       if (ssp) {
                         const next = attachEvidenceToSSP(ssp, it, []); // attach to back-matter only
