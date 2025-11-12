@@ -1,23 +1,35 @@
+version: 1
 priorities: [xdomea, bpmn, vendor]
-rules:
-  - target: system-security-plan.system-characteristics.props
-    op: push
-    value:
-      name: ropa:purpose
-      value: $xdomea.Process.Purpose
-    normalize: [trim]
-    fallback:
-      name: ropa:purpose
-      value: "<unassigned>"
 
-  - target: system-security-plan.system-characteristics.props
-    op: push
+rules:
+  # 1) PURPOSE (updated)
+  - id: ropa-purpose
+    op: set
+    target: "system-security-plan.system-characteristics.props"
     value:
-      name: ropa:legal-basis
-      value: $xdomea.Process.LegalBasis
+      name: "ropa:purpose"
+      # first non-empty from priorities[] wins:
+      # try xdomea, else bpmn, else vendor
+      value: "$xdomea.Process.Purpose"
     normalize:
       - trim
       - map:
-          "Art. 6(1)(a) GDPR": consent
-          "Art. 6(1)(b) GDPR": contract
-          "Art. 6(1)(c) GDPR": legal-obligation
+          # optional harmonization examples (extend as you like)
+          "Bearbeitung von Online-Anträgen": "Online application processing"
+          "Terminvergabe": "Appointment scheduling"
+          "Auskunftserteilung": "Data subject access requests"
+    fallback: "<unassigned>"
+
+  # 2) LEGAL BASIS (unchanged; example)
+  - id: ropa-legal-basis
+    op: set
+    target: "system-security-plan.system-characteristics.props"
+    value:
+      name: "ropa:legal-basis"
+      value: "$xdomea.Process.LegalBasis"
+    normalize:
+      - trim
+      - map:
+          "Art. 6(1)(c) DSGVO": "GDPR-6(1)(c)"
+          "Art. 6(1)(e) DSGVO": "GDPR-6(1)(e)"
+    fallback: "<unassigned>"

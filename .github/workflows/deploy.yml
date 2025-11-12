@@ -33,6 +33,13 @@ jobs:
         with:
           node-version: 20
 
+      - name: Validate mapper YAML exists
+        run: test -f mappings/xdomea_to_ropa.yaml
+
+      - name: Check contract availability
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/open-gov-group/opengov-privacy-oscal/main/oscal/contract.json >/dev/null
+
       # Optional: install root deps if a package.json is present at repo root
       - name: Install root deps (optional)
         run: |

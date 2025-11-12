@@ -1,0 +1,66 @@
+openapi: 3.0.3
+info:
+  title: OpenGov Privacy Gateway
+  version: 0.1.0
+servers:
+  - url: https://gateway.example.org/v0
+paths:
+  /ingest/xdomea/{id}:
+    get:
+      summary: Get normalized XDOMEA JSON by ID
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        "404": { description: Not Found }
+  /ingest/bpmn/{id}:
+    get:
+      summary: Extracted process/data from BPMN by ID
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  bpmn:
+                    type: object
+                    properties:
+                      documentation: { type: string }
+        "404": { description: Not Found }
+  /ingest/vendor/{slug}:
+    get:
+      summary: Vendor TOM/components mapping
+      parameters:
+        - in: path
+          name: slug
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  vendor:
+                    type: object
+                    additionalProperties: true
+        "404": { description: Not Found }
+components: {}

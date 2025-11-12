@@ -16,6 +16,7 @@ import { runMapper } from "./lib/mapper";
 import { loadXdomea } from "./adapters/xdomea";
 import { loadBpmnXml } from "./adapters/bpmn";
 import { addEvidence, loadRegistry, attachEvidenceToSSP } from "./lib/evidence";
+import { loadContractFromSSP, loadDefaultContract, pickProfileUrl, getBackMatterRlink } from "./lib/contract";
 import * as yaml from "js-yaml";
 
 const dig = (o, p, d=undefined) => p.split(".").reduce((a,k)=> (a&&k in a?a[k]:undefined), o) ?? d;
@@ -53,6 +54,22 @@ export default function App() {
   const [eviHashAlg, setEviHashAlg] = useState("");
   const [eviHashVal, setEviHashVal] = useState("");
   const [eviReg, setEviReg] = useState([]);
+
+  const [contract, setContract] = useState(null);
+
+  useEffect(() => {
+    (async () => {
+      if (!ssp) return;
+      try {
+        const c = (await loadContractFromSSP(ssp)) || (await loadDefaultContract());
+        setContract(c);
+      } catch (e) {
+        // non-fatal: keep old behaviour
+        console.warn("contract load failed:", e);
+      }
+    })();
+  }, [ssp]);
+
 
   useEffect(()=>{ setEviReg(loadRegistry()); }, []);
 
