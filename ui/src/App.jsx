@@ -61,15 +61,15 @@ export default function App() {
     (async () => {
       if (!ssp) return;
       try {
+        // try back-matter → res-contract; fallback to static contract.json
         const c = (await loadContractFromSSP(ssp)) || (await loadDefaultContract());
         setContract(c);
       } catch (e) {
-        // non-fatal: keep old behaviour
         console.warn("contract load failed:", e);
+        setContract(null); // app will fall back to import-profile.href
       }
     })();
   }, [ssp]);
-
 
   useEffect(()=>{ setEviReg(loadRegistry()); }, []);
 
@@ -244,6 +244,32 @@ export default function App() {
               }}
             >
               Map from XDOMEA/BPMN
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={async () => {
+                try {
+                  if (!ssp) throw new Error("Load an SSP first.");
+
+                  // choose resolved profile URL via contract; fallback to import-profile.href
+                  const profileUrl = pickProfileUrl(contract, ssp);
+                  if (!profileUrl) throw new Error("No profile URL available (contract/import-profile missing).");
+
+                  const ir = await generateIRFromProfile(profileUrl); // returns implemented-requirements[]
+
+                  const next = structuredClone(ssp);
+                  const sspRoot = next["system-security-plan"];
+                  sspRoot["control-implementation"] ||= {};
+                  sspRoot["control-implementation"]["implemented-requirements"] = ir;
+
+                  setSsp(next);
+                  setErr("");
+                } catch (e) {
+                  setErr(e.message || String(e));
+                }
+              }}
+            >
+              Populate implemented requirements
             </Button>
 
             {err && (
