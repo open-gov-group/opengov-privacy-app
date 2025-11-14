@@ -9,10 +9,11 @@ import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/
 import { Progress } from "@/components/ui/progress";
 import { ShieldCheck, Loader2, FileText, Upload, Link2, Wrench, Book } from "lucide-react";
 import { generateIRFromProfile } from "./lib/ir-from-profile";
-
-// import { fetchCatalogManifest } from "./lib/catalog-manifest"; // keep if you want to use it
+import { runMapper } from "./lib/mapper";
+import { fetchCatalogManifest } from "./lib/catalog-manifest"; 
 import { addEvidence as addEvidenceToRegistry, loadRegistry, attachEvidenceToSSP } from "./lib/evidence";
 import { loadContractFromSSP, loadDefaultContract, pickProfileUrl, getBackMatterRlink } from "./lib/contract";
+import PoamList from './components/ui/PoamList.jsx';
 
 const dig = (o, p, d=undefined) => p.split(".").reduce((a,k)=> (a&&k in a?a[k]:undefined), o) ?? d;
 
@@ -20,6 +21,8 @@ export default function App() {
   const qp = new URLSearchParams(window.location.search);
   const [sspUrl, setSspUrl]   = useState(qp.get("ssp")  || "https://raw.githubusercontent.com/open-gov-group/opengov-privacy-oscal/main/oscal/ssp/ssp_template_ropa_full.json");
   const [poamUrl, setPoamUrl] = useState(qp.get("poam") || "https://raw.githubusercontent.com/open-gov-group/opengov-privacy-oscal/main/oscal/poam/poam_template.json");
+  const [poamJson, setPoamJson] = useState(null);
+  const [poamErr, setPoamErr] = useState('');
 
   const [riskQual, setRiskQual] = useState([]);
   const [riskQuant, setRiskQuant] = useState(null);
@@ -218,6 +221,20 @@ export default function App() {
     URL.revokeObjectURL(url);
   };
 
+
+  async function loadPoam() {
+    setPoamErr('');
+    try {
+      const res = await fetch(poamUrl);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const j = await res.json();
+      setPoamJson(j['plan-of-action-and-milestones'] || j); // falls die Datei auf Root-Objekt zeigt
+    } catch (e) {
+      setPoamErr(String(e));
+      setPoamJson(null);
+    }
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white p-6">
       <div className="max-w-6xl mx-auto space-y-6">
@@ -288,20 +305,42 @@ export default function App() {
               <Input value={bpmnUrl} onChange={e=>setBpmnUrl(e.target.value)} placeholder="BPMN XML URL (optional)" />
             </div>
             <Button
-              variant="default"
               onClick={async () => {
                 try {
                   if (!ssp) throw new Error("Load an SSP first.");
-                  // Load sources
+
+                  // 1) Ruleset-URL bestimmen: erst SSP back-matter (uuid=res-ruleset-xdomea), dann Contract
+                  const rulesetFromBM = (ssp?.["system-security-plan"]?.["back-matter"]?.resources || [])
+                    .find(r => r.uuid === "res-ruleset-xdomea")?.rlinks?.[0]?.href;
+                  const rulesetFromContract = (contract?.sources?.rulesets || [])
+                    .sort((a,b) => (a.priority ?? 0) - (b.priority ?? 0));
+                  const rulesetFromContractUrl =
+                    (rulesetFromContract.find(r => r.id === "xdomea-default")?.yamlUrl) ||
+                    (rulesetFromContract[0]?.yamlUrl);
+                  let rulesUrl = rulesetFromBM || rulesetFromContractUrl;
+                  if (!rulesUrl) throw new Error("No ruleset yamlUrl found (back-matter/contract).");
+
+                  // 2) YAML-Regeln laden
+                  const rulesYaml = await fetch(rulesUrl, { cache: "no-store" }).then(r => r.text());
+
+                  // 3) Quellen laden (xdomea/bpmn optional)
                   const sources = {};
-                  if (xdomeaUrl) sources.xdomea = await loadXdomea(xdomeaUrl);
-                  if (bpmnUrl) sources.bpmn = await loadBpmnXml(bpmnUrl);
+                  if (xdomeaUrl?.trim()) {
+                    const r = await fetch(xdomeaUrl, { cache: "no-store" });
+                    if (!r.ok) throw new Error(`XDOMEA fetch failed: ${r.status}`);
+                    sources.xdomea = await r.json();
+                  }
+                  if (bpmnUrl?.trim()) {
+                    const r = await fetch(bpmnUrl, { cache: "no-store" });
+                    if (!r.ok) throw new Error(`BPMN fetch failed: ${r.status}`);
+                    const xml = await r.text();
+                    const purpose = (xml.match(/<bpmn:documentation[^>]*>([\s\S]*?)<\/bpmn:documentation>/i) || [])[1] || "";
+                    sources.bpmn = { process: { documentation: purpose.trim() } };
+                  }
+                  // Vendor kann später ergänzt werden: sources.vendor = {...}
 
-                  // Fetch YAML rules from repo (adjust if you keep them elsewhere)
-                  const rulesUrl = "https://raw.githubusercontent.com/open-gov-group/opengov-privacy-app/main/mappings/xdomea_to_ropa.yaml";
-                  const rules = await fetch(rulesUrl, { cache: "no-store" }).then(r=>r.text());
-
-                  const mapped = runMapper(ssp, rules, sources);
+                  // 4) Mapping ausführen
+                  const mapped = runMapper(ssp, rulesYaml, sources);
                   setSsp(mapped);
                   setErr("");
                 } catch (e) {
@@ -456,6 +495,7 @@ export default function App() {
             )}
             <Card className="shadow-sm">
               <CardContent className="p-5 space-y-4">
+                 
                 {!poam ? <div className="text-slate-500 text-sm">Load a POA&M JSON to view items.</div> : (
                   <div className="grid md:grid-cols-2 gap-3">
                     {(dig(poam,"plan-of-action-and-milestones.poam-items",[])||[]).map(it=>(
@@ -471,6 +511,18 @@ export default function App() {
                     ))}
                   </div>
                 )}
+               <div className="p-6 space-y-4">
+                <div className="flex gap-2">
+                  <input className="border rounded px-3 py-2 w-full"
+                        placeholder="POA&M JSON URL"
+                        value={poamUrl}
+                        onChange={e=>setPoamUrl(e.target.value)} />
+                  <button className="border rounded px-4 py-2" onClick={loadPoam}>Load POA&M</button>
+                </div>
+                {poamErr && <div className="text-red-600 text-sm">Fehler: {poamErr}</div>}
+                {poamJson && <PoamList poam={poamJson} />}
+              </div>
+
               </CardContent>
             </Card>
           </TabsContent>
