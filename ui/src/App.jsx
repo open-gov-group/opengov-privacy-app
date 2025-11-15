@@ -14,12 +14,38 @@ import { fetchCatalogManifest } from "./lib/catalog-manifest";
 import { addEvidence as addEvidenceToRegistry, loadRegistry, attachEvidenceToSSP } from "./lib/evidence";
 import { loadContractFromSSP, loadDefaultContract, pickProfileUrl, getBackMatterRlink } from "./lib/contract";
 import PoamList from './components/ui/PoamList.jsx';
+import './index.css'
 
 const dig = (o, p, d=undefined) => p.split(".").reduce((a,k)=> (a&&k in a?a[k]:undefined), o) ?? d;
 
+
+
 export default function App() {
+  const PROFILES = [
+    {
+      id: 'intervenability',
+      label: 'Profile – Intervenability (OG)',
+      href: 'https://raw.githubusercontent.com/open-gov-group/opengov-privacy-oscal/main/oscal/profiles/profile_intervenability.json'
+    },
+    {
+      id: 'data-minimization',
+      label: 'Profile – Data Minimization (OG)',
+      href: 'https://raw.githubusercontent.com/open-gov-group/opengov-privacy-oscal/main/oscal/profiles/profile_data_minimization.json'
+    }
+  ]
+  const LS_PROFILE = 'opgov:profileHref';
+ 
   const qp = new URLSearchParams(window.location.search);
   const [sspUrl, setSspUrl]   = useState(qp.get("ssp")  || "https://raw.githubusercontent.com/open-gov-group/opengov-privacy-oscal/main/oscal/ssp/ssp_template_ropa_full.json");
+
+  //const [sspUrl, setSspUrl] = useState('')
+  const [profileHref, setProfileHref] = useState(
+    localStorage.getItem('profileHref') || PROFILES[0].href
+  )
+
+  const [portfolioUrl, setPortfolioUrl] = useState("");
+  const [portfolioId, setPortfolioId] = useState("");
+
   const [poamUrl, setPoamUrl] = useState(qp.get("poam") || "https://raw.githubusercontent.com/open-gov-group/opengov-privacy-oscal/main/oscal/poam/poam_template.json");
   const [poamJson, setPoamJson] = useState(null);
   const [poamErr, setPoamErr] = useState('');
@@ -59,6 +85,22 @@ export default function App() {
   const [contract, setContract] = useState(null);
 
   useEffect(() => {
+     const qp = new URLSearchParams(location.search)
+     const s = qp.get('ssp')
+     const p = qp.get("poam");
+     const pf = qp.get("portfolio");
+     const pid = qp.get("id");
+     if (s) setSspUrl(s);
+     if (p) setPoamUrl(p);
+     if (pf) setPortfolioUrl(pf);
+     if (pid) setPortfolioId(pid);
+   }, [])
+
+   useEffect(() => {
+     localStorage.setItem('profileHref', profileHref)
+   }, [profileHref])
+
+  useEffect(() => {
     (async () => {
       if (!ssp) return;
       try {
@@ -71,6 +113,32 @@ export default function App() {
       }
     })();
   }, [ssp]);
+
+  async function loadPortfolioAndSelect() {
+    if (!portfolioUrl) return;
+    try {
+      setErr("");
+      const res = await fetch(portfolioUrl);
+      if (!res.ok) throw new Error(`Portfolio HTTP ${res.status}`);
+      const idx = await res.json();
+      const items = Array.isArray(idx.items) ? idx.items : [];
+      if (!items.length) throw new Error("Portfolio: no items");
+      const chosen =
+        (portfolioId && items.find((it) => String(it.aktenplan_id) === String(portfolioId))) ||
+        items[0];
+      if (!chosen?.ssp?.href) throw new Error("Portfolio: item has no ssp.href");
+      setSspUrl(chosen.ssp.href);
+      if (chosen.profile?.href) setProfileHref(chosen.profile.href);
+    } catch (e) {
+      setErr(`Fehler beim Laden des Portfolios\n\n${e?.message || e}`);
+    }
+  }
+
+
+
+  useEffect(() => {
+    if (profileHref) localStorage.setItem(LS_PROFILE, profileHref);
+  }, [profileHref]);
 
   useEffect(() => {
     (async () => {
@@ -176,6 +244,13 @@ export default function App() {
         fetchJson(poamUrl).catch(()=>null)
       ]);
       setSsp(s); setPoam(p);
+      // falls user kein Profil manuell gewählt hat, versuche import-profile aus SSP
+      try {
+        const imported = s?.["system-security-plan"]?.["import-profile"]?.href;
+        if (imported && !localStorage.getItem(LS_PROFILE)) {
+          setProfileHref(imported);
+        }
+      } catch {/*noop*/}      
     } catch (e) { setErr(String(e.message||e)); }
     finally { setLoading(false); }
   };
@@ -234,11 +309,23 @@ export default function App() {
       setPoamJson(null);
     }
   }
+   async function loadSSP() {
+     try {
+        const res = await fetch(sspUrl)
+          if (!res.ok) throw new Error(`HTTP ${res.status}`)
+          const json = await res.json()
+          // TODO: render json in tabs/cards
+          setError('')
+        } catch (e) {
+       setError(`Fehler beim Laden\n\n${e?.message || e}`)
+     }
+   }
+
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white p-6">
       <div className="max-w-6xl mx-auto space-y-6">
-        <header className="flex items-center justify-between">
+        <header className="flex items-center justify-between gap-3 flex-wrap">
           <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
             <ShieldCheck className="w-6 h-6" /> OpenGov Privacy — Reader & Uploader
           </h1>
@@ -254,12 +341,37 @@ export default function App() {
                 {catalogList.map(c=> <option key={c.id} value={c.id}>{c.title} {c.version}</option>)}
               </select>
             </div>
-          )}       
+          )}    
+            <div className="text-xs">
+            <label className="mr-2">Profile:</label>
+            <select
+              className="border rounded-md px-2 py-1"
+              value={profileHref}
+              onChange={(e)=> setProfileHref(e.target.value)}
+            >
+              {PROFILES.map(p => <option key={p.id} value={p.href}>{p.label}</option>)}
+            </select>
+          </div>   
         </header>
 
         <Card className="shadow-sm">
           <CardContent className="p-4 grid md:grid-cols-2 gap-3">
-
+            <div className="grid md:grid-cols-2 gap-2">
+              <input
+                className="col-span-2 border rounded-lg px-3 py-2 w-full"
+                placeholder="Portfolio URL (index.json)"
+                value={portfolioUrl}
+                onChange={(e) => setPortfolioUrl(e.target.value)}
+              />
+              </div>
+              <div className="grid md:grid-cols-2 gap-2">
+              <button
+                onClick={loadPortfolioAndSelect}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-4 py-2"
+              >
+                Aus Portfolio wählen
+              </button>
+            </div>
             <div className="flex gap-2 items-center">
               <Input value={sspUrl} onChange={e=>setSspUrl(e.target.value)} placeholder="https://.../ssp.json" />
               <a className="text-xs text-slate-600 underline" href={sspUrl} target="_blank" rel="noreferrer">open</a>
@@ -269,6 +381,7 @@ export default function App() {
               <Input value={poamUrl} onChange={e=>setPoamUrl(e.target.value)} placeholder="https://.../poam.json" />
               <a className="text-xs text-slate-600 underline" href={poamUrl} target="_blank" rel="noreferrer">open</a>
             </div>
+
             <div className="md:col-span-2 flex gap-2">
               <Button onClick={load} disabled={loading}>
                 {loading ? <Loader2 className="w-4 h-4 mr-2 animate-spin"/> : <FileText className="w-4 h-4 mr-2"/>}
@@ -279,7 +392,8 @@ export default function App() {
                 onClick={async () => {
                   try {
                     if (!ssp) throw new Error("Load an SSP first.");
-                    const profileUrl = pickProfileUrl(contract, ssp);
+                    //const profileUrl = pickProfileUrl(contract, ssp);
+                    const profileUrl = profileHref || pickProfileUrl(contract, ssp);
                     if (!profileUrl) throw new Error("No profile URL available (contract/import-profile missing).");
                     const ir = await generateIRFromProfile(profileUrl);
                     const next = structuredClone(ssp);
@@ -357,7 +471,8 @@ export default function App() {
                   if (!ssp) throw new Error("Load an SSP first.");
 
                   // choose resolved profile URL via contract; fallback to import-profile.href
-                  const profileUrl = pickProfileUrl(contract, ssp);
+                  //const profileUrl = pickProfileUrl(contract, ssp);
+                  const profileUrl = profileHref || pickProfileUrl(contract, ssp);
                   if (!profileUrl) throw new Error("No profile URL available (contract/import-profile missing).");
 
                   const ir = await generateIRFromProfile(profileUrl); // returns implemented-requirements[]

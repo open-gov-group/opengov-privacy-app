@@ -1,0 +1,38 @@
+{
+  "version": "0.1",
+  "generated": "2025-11-15T10:00:00Z",
+  "items": [
+    {
+      "aktenplan_id": "EMR/01.02.03",
+      "title": "Elektronisches Melderegister – Auskunftserteilung",
+      "description": "Verarbeitung von Meldedaten zur Auskunft an Berechtigte.",
+      "ssp": {
+        "uuid": "7d0f2a2f-9a4f-46d1-9d0b-3c3f2c2b3c31",
+        "href": "https://raw.githubusercontent.com/open-gov-group/opengov-privacy-mappings/main/build/ssp.json"
+      },
+      "profile": {
+        "href": "https://raw.githubusercontent.com/open-gov-group/opengov-privacy-oscal/main/oscal/profiles/profile_intervenability.json"
+      },
+      "poam": {
+        "href": "https://raw.githubusercontent.com/open-gov-group/opengov-privacy-oscal/main/oscal/poam/sample_poam.json"
+      },
+      "owner_role": "System Owner",
+      "status": "released",
+      "tags": ["EMR", "Auskunft"]
+    },
+    {
+      "aktenplan_id": "DMS/02.01",
+      "title": "Dokumentenmanagement – Aktenführung",
+      "description": "Elektronische Aktenführung / Schriftgutverwaltung.",
+      "ssp": {
+        "uuid": "11111111-2222-3333-4444-555555555555",
+        "href": "https://raw.githubusercontent.com/open-gov-group/opengov-privacy-oscal/main/oscal/ssp/ssp_template_ropa.json"
+      },
+      "profile": {
+        "href": "https://raw.githubusercontent.com/open-gov-group/opengov-privacy-oscal/main/oscal/profiles/profile_data_minimization.json"
+      },
+      "status": "in-review",
+      "tags": ["DMS"]
+    }
+  ]
+}
