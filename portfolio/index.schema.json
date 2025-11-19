@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://open-gov-group.github.io/opengov-privacy/portfolio/index.schema.json",
+  "$id": "https://open-gov-group.github.io/opengov-privacy-app/portfolio/index.schema.json",
   "title": "OpenGov Privacy – Portfolio Index",
   "type": "object",
   "required": ["version", "items"],
