@@ -8,7 +8,9 @@ import './index.css';
 const router = createBrowserRouter([
   { path: '/', element: <App /> },
   { path: '/tenant', element: <TenantSetup /> },
-]);
+],
+  { basename: '/opengov-privacy-app' } 
+);
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode><RouterProvider router={router} /></React.StrictMode>

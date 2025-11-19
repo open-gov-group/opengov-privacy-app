@@ -15,3 +15,7 @@ jobs:
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           workingDirectory: "workers"
           command: "deploy"
+          
+      - name: Add SPA 404 fallback (GitHub Pages)
+        run: cp dist/index.html dist/404.html
+        working-directory: ui
