@@ -11,8 +11,10 @@ const router = createBrowserRouter(
     {
       element: <Layout />,
       children: [
-        { path: '/', element: <App /> },
+        { path: '/', element: <Home  /> },
         { path: '/tenant', element: <TenantSetup /> },
+        { path: '/tenant', element: <RopaDirectory  /> },
+        { path: '/tenant', element: <SspEditor /> }
       ]
     }
   ],

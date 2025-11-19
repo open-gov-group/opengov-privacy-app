@@ -35,6 +35,22 @@ export default function Navbar() {
           >
             Tenant
           </NavLink>
+          <NavLink
+            to="/ropa"
+            className={({ isActive }) =>
+              `${linkBase} ${isActive ? active : inactive}`
+            }
+          >
+            RoPA
+          </NavLink>
+          <NavLink
+            to="/ssp"
+            className={({ isActive }) =>
+              `${linkBase} ${isActive ? active : inactive}`
+            }
+          >
+            Process
+          </NavLink>
         </nav>
       </div>
     </header>
