@@ -20,7 +20,7 @@ const dig = (o, p, d=undefined) => p.split(".").reduce((a,k)=> (a&&k in a?a[k]:u
 const API_BASE = import.meta.env.VITE_API_BASE;
 
 
-export default function App() {
+export default function SspEditor() {
  
   const PROFILES = [
     {

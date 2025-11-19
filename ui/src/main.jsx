@@ -2,8 +2,10 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { createBrowserRouter, RouterProvider } from 'react-router-dom';
 import Layout from './components/Layout.jsx'
-import App from './App.jsx';
+import Home from './pages/Home.jsx';
 import TenantSetup from './pages/TenantSetup.jsx';
+import RopaDirectory from './pages/RopaDirectory.jsx';
+import SspEditor from './pages/SspEditor.jsx';
 import './index.css';
 
 const router = createBrowserRouter(
