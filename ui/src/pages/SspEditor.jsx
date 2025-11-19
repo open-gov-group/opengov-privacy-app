@@ -8,13 +8,13 @@ import { Badge } from "@/components/ui/badge";
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/components/ui/accordion";
 import { Progress } from "@/components/ui/progress";
 import { ShieldCheck, Loader2, FileText, Upload, Link2, Wrench, Book } from "lucide-react";
-import { generateIRFromProfile } from "./lib/ir-from-profile";
-import { runMapper } from "./lib/mapper";
-import { fetchCatalogManifest } from "./lib/catalog-manifest"; 
-import { addEvidence as addEvidenceToRegistry, loadRegistry, attachEvidenceToSSP } from "./lib/evidence";
-import { loadContractFromSSP, loadDefaultContract, pickProfileUrl, getBackMatterRlink } from "./lib/contract";
-import PoamList from './components/ui/PoamList.jsx';
-import './index.css'
+import { generateIRFromProfile } from "../lib/ir-from-profile";
+import { runMapper } from "../lib/mapper";
+import { fetchCatalogManifest } from "../lib/catalog-manifest"; 
+import { addEvidence as addEvidenceToRegistry, loadRegistry, attachEvidenceToSSP } from "../lib/evidence";
+import { loadContractFromSSP, loadDefaultContract, pickProfileUrl, getBackMatterRlink } from "../lib/contract";
+import PoamList from '../components/ui/PoamList.jsx';
+import '../index.css'
 
 const dig = (o, p, d=undefined) => p.split(".").reduce((a,k)=> (a&&k in a?a[k]:undefined), o) ?? d;
 const API_BASE = import.meta.env.VITE_API_BASE;

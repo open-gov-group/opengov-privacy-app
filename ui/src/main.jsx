@@ -15,8 +15,8 @@ const router = createBrowserRouter(
       children: [
         { path: '/', element: <Home  /> },
         { path: '/tenant', element: <TenantSetup /> },
-        { path: '/tenant', element: <RopaDirectory  /> },
-        { path: '/tenant', element: <SspEditor /> }
+        { path: '/ropa', element: <RopaDirectory  /> },
+        { path: '/ssp', element: <SspEditor /> }
       ]
     }
   ],
