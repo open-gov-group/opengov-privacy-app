@@ -1,9 +1,9 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-const { search } = useLocation();
-const params = new URLSearchParams(search);
-const orgId = params.get('org') || 'demo-org';
-const bundleId = params.get('bundle') || 'bundle-1';
+//const { search } = useLocation();
+//const params = new URLSearchParams(search);
+//const orgId = params.get('org') || 'demo-org';
+//const bundleId = params.get('bundle') || 'bundle-1';
 
 export default function Home() {
   return (
