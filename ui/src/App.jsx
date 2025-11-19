@@ -17,10 +17,11 @@ import PoamList from './components/ui/PoamList.jsx';
 import './index.css'
 
 const dig = (o, p, d=undefined) => p.split(".").reduce((a,k)=> (a&&k in a?a[k]:undefined), o) ?? d;
-
+const API_BASE = import.meta.env.VITE_API_BASE;
 
 
 export default function App() {
+ 
   const PROFILES = [
     {
       id: 'intervenability',
@@ -83,6 +84,7 @@ export default function App() {
   const [eviReg, setEviReg] = useState([]);
 
   const [contract, setContract] = useState(null);
+
 
   useEffect(() => {
      const qp = new URLSearchParams(location.search)
@@ -296,6 +298,11 @@ export default function App() {
     URL.revokeObjectURL(url);
   };
 
+  async function apiGet(path) {
+    const res = await fetch(`${API_BASE}${path}`, { credentials: 'omit' });
+    if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+    return res.json();
+  }
 
   async function loadPoam() {
     setPoamErr('');

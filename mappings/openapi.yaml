@@ -1,0 +1,39 @@
+openapi: 3.0.3
+info:
+  title: OpenGov Privacy – SSP API
+  version: 0.1.0
+servers:
+  - url: https://api.opengov.example
+paths:
+  /api/ssp/{id}:
+    get:
+      summary: Get SSP (OSCAL JSON) by logical ID
+      parameters:
+        - in: path
+          name: id
+          schema: { type: string }
+          required: true
+          description: Logical SSP id (e.g., emr-auskunft)
+      responses:
+        "200":
+          description: SSP JSON
+          headers:
+            ETag: { description: Entity tag, schema: { type: string } }
+            Cache-Control: { schema: { type: string } }
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  system-security-plan: { type: object }
+        "304":
+          description: Not Modified (ETag)
+        "404":
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error: { type: string }
+                  detail: { type: string }

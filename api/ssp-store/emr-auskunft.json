@@ -1,0 +1,112 @@
+{
+  "system-security-plan": {
+    "uuid": "7c01c85f-7d83-4cc3-a486-0b2c32f5fc0b",
+    "metadata": {
+      "title": "SSP – Elektronisches Melderegister",
+      "last-modified": "2025-11-13T10:37:39.168Z",
+      "version": "0.1.0",
+      "oscal-version": "1.1.2"
+    },
+    "import-profile": {
+      "href": "https://raw.githubusercontent.com/open-gov-group/opengov-privacy-oscal/main/oscal/profiles/profile_intervenability.json"
+    },
+    "system-characteristics": {
+      "system-ids": [
+        {
+          "identifier-type": "https://ietf.org/rfc/rfc4122",
+          "id": "7c01c85f-7d83-4cc3-a486-0b2c32f5fc0b"
+        }
+      ],
+      "system-name": "Elektronisches Melderegister",
+      "system-name-short": "Elektronis",
+      "description": "Short description of the processing, purpose, legal basis, data categories.",
+      "status": {
+        "state": "operational"
+      },
+      "security-sensitivity-level": "moderate",
+      "system-information": {
+        "information-types": [
+          {
+            "title": "Personal data (GDPR)",
+            "description": "Personal data processed in this activity."
+          }
+        ]
+      },
+      "authorization-boundary": {
+        "description": "Logical boundary of the processing activity (apps, services, data stores, network zones)."
+      },
+      "props": [
+        {
+          "name": "purpose",
+          "ns": "https://open-gov-group.github.io/ns/ropa",
+          "value": "<to be defined>"
+        }
+      ]
+    },
+    "system-implementation": {
+      "users": [
+        {
+          "uuid": "3c250c0d-0961-4ce3-bfcc-29feaa4c49d5",
+          "title": "Administrators",
+          "role-ids": [
+            "owner"
+          ]
+        }
+      ],
+      "components": [
+        {
+          "uuid": "f6e64b55-ae8b-428a-b234-fe5ffbb82e3b",
+          "type": "service",
+          "title": "Rights Portal / IAM",
+          "description": "Placeholder",
+          "status": {
+            "state": "operational"
+          }
+        }
+      ]
+    },
+    "control-implementation": {
+      "description": "Implementation of controls per profile/catalog; component mapping and evidence.",
+      "implemented-requirements": [
+        {
+          "control-id": "PLACEHOLDER",
+          "statements": [
+            {
+              "statement-id": "placeholder",
+              "by-components": [
+                {
+                  "component-uuid": "f6e64b55-ae8b-428a-b234-fe5ffbb82e3b",
+                  "description": "Initial mapping placeholder",
+                  "uuid": "f3453aa2-fbf7-4c6f-b5a0-4556c58a919c"
+                }
+              ],
+              "uuid": "826c29f1-72b9-4f74-bde9-61e3c6ef2cda"
+            }
+          ],
+          "by-components": [
+            {
+              "component-uuid": "f6e64b55-ae8b-428a-b234-fe5ffbb82e3b",
+              "description": "Initial component coverage",
+              "uuid": "7cc72c3f-0483-476d-94b2-291d05a11cd8"
+            }
+          ],
+          "uuid": "35e99657-8965-4791-aa87-b23035b204a5"
+        }
+      ]
+    },
+    "back-matter": {
+      "resources": [
+        {
+          "uuid": "666124ef-66dd-4c53-aa78-e176d07cf51d",
+          "title": "Evidence index",
+          "rlinks": [
+            {
+              "href": "https://github.com/open-gov-group/opengov-privacy-oscal",
+              "media-type": "text/html"
+            }
+          ]
+        }
+      ]
+    }
+  }
+}
