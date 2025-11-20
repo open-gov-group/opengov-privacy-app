@@ -43,14 +43,14 @@ jobs:
       - name: Health Check (GET /api/healthz)
         run: |
           curl -sS -D - -o /dev/null --fail-with-body \
-            https://opengov-privacy-api-staging.opengov-group.workers.dev/api/healthz
+            https://opengov-privacy-api.opengov-group.workers.dev/healthz
 
       - name: CORS Preflight (OPTIONS /api/healthz)
         run: |
           curl -sS -X OPTIONS -D - -o /dev/null --fail-with-body \
             -H "Origin: https://open-gov-group.github.io" \
             -H "Access-Control-Request-Method: GET" \
-            https://opengov-privacy-api-staging.opengov-group.workers.dev/api/healthz | tee /dev/stderr
+            https://opengov-privacy-api.opengov-group.workers.dev/healthz | tee /dev/stderr
 
 
       # Optional: install root deps if a package.json is present at repo root
