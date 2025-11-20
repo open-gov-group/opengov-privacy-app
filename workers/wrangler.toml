@@ -1,8 +1,0 @@
-name = "opengov-ssp-api"
-main = "worker.mjs"
-compatibility_date = "2024-11-01"
-
-# Optional: Routen, wenn via custom domain
-# routes = [
-#   { pattern = "api.opengov.example/api/*", zone_name = "opengov.example" }
-# ]
