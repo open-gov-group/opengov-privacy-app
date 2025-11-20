@@ -2,10 +2,6 @@ import fs from 'node:fs/promises';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 const exec = promisify(execFile);
-
-import { api } from '@/lib/api';
-const pong = await api('/api/healthz'); // GET
-
 await exec('node', ['tools/run-mapper.mjs',
   'oscal/ssp/ssp_template_ropa_full.json',
   'mappings/xdomea_to_ropa.yaml',
