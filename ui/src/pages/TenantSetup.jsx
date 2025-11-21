@@ -1,6 +1,7 @@
 // ui/src/pages/TenantSetup.jsx
 import React, { useState } from 'react';
-import { buildOrgId } from '@/lib/orgId'; // gleiche Logik wie oben (UI-Kopie)
+import { buildOrgId, ensureTenant } from '@/lib/tenantApi';
+
 const BASE = import.meta.env.VITE_GATEWAY_BASE || '';
 
 export default function TenantSetup() {
@@ -28,17 +29,9 @@ export default function TenantSetup() {
     e.preventDefault();
     setBusy(true); setErr('');
     try {
-      const r = await fetch(`${BASE}/api/tenants`, {
-        method: 'POST',
-        headers: {
-          'content-type': 'application/json',
-          // optional: 'x-api-key': import.meta.env.VITE_APP_API_KEY ?? ''
-        },
-        body: JSON.stringify(form)
-      });
-      if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
-      const j = await r.json();
-      setResult(j);
+     const outcome = await ensureTenant(form);
+     setResult(outcome);
+
     } catch (e) {
       setErr(String(e));
     } finally {
@@ -122,11 +115,17 @@ export default function TenantSetup() {
         <div className="rounded border bg-white p-4">
           <div className="font-semibold mb-2">Ergebnis</div>
           <div className="text-sm">OrgID: <span className="font-mono">{result.orgId}</span></div>
-          <div className="text-sm">Pfad: <span className="font-mono">{result.path}</span></div>
-          <div className="text-sm">
-            RAW:&nbsp;
-            <a className="text-blue-700 underline" href={result.url} target="_blank" rel="noreferrer">{result.url}</a>
-          </div>
+          <div className="text-sm">Status: {result.exists ? 'bereits vorhanden' : 'neu angelegt'}</div>
+          {result.prUrl && (
+            <div className="text-sm">PR:&nbsp;
+              <a className="text-blue-700 underline" href={result.prUrl} target="_blank" rel="noreferrer">{result.prUrl}</a>
+            </div>
+          )}
+          {result.sspUrl && (
+            <div className="text-sm">SSP (raw):&nbsp;
+              <a className="text-blue-700 underline" href={result.sspUrl} target="_blank" rel="noreferrer">{result.sspUrl}</a>
+            </div>
+          )}
         </div>
       )}
     </div>
