@@ -1,5 +1,5 @@
 // src/pages/TenantSetup.jsx
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { buildOrgId, getTenant, initTenant, updateTenant, ensureTenant } from '@/lib/tenantApi';
 import { setOrgId, getOrgId } from '@/lib/orgId';
 import { getGlobalFromTenant, applyGlobalToTenant } from '@/lib/tenantShape';
