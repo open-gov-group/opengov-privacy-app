@@ -9,7 +9,7 @@ export default function TenantSetup() {
     stateCode: 'DE',
     countyCode: 'NRW',
     townId: '40213',
-    townName: 'DÜSSELDORF'
+    townName: 'DUESSELDORF'
   });
 
   const orgIdPreview = useMemo(() => buildOrgId(form), [form]);
@@ -18,9 +18,47 @@ export default function TenantSetup() {
   const [tenant, setTenant] = useState(null);
 
   // UI state
+  const [orgId, setOrgId] = useState('');
+  const [branch, setBranch] = useState(''); // optional: vorgeschlagen/zuletzt benutzt
+
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState('');
   const [err, setErr] = useState('');
+
+  async function handleDraftSave() {
+    setBusy(true); setMsg(''); setErr('');
+    try {
+      const ref = branch || `feature/${orgId}-tenant`;
+      const res = await fetch(`${import.meta.env.VITE_GATEWAY_BASE}/api/tenants/${encodeURIComponent(orgId)}/save?ref=${encodeURIComponent(ref)}`, {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json', 'x-api-key': import.meta.env.VITE_GATEWAY_API_KEY || '' },
+        body: JSON.stringify(tenant)
+      });
+      const j = await res.json();
+      if (!res.ok || !j.ok) throw new Error(j.error || res.statusText);
+      setBranch(j.branch || ref);
+      setMsg(`Entwurf gespeichert @ ${j.branch}${j.prUrl ? ` (PR: ${j.prUrl})` : ''}`);
+    } catch (e) {
+      setErr(`Draft speichern fehlgeschlagen: ${e.message}`);
+    } finally { setBusy(false); }
+  }
+
+  async function handleSaveAndMerge() {
+    setBusy(true); setMsg(''); setErr('');
+    try {
+      const head = branch || `feature/${orgId}-tenant`;
+      const res = await fetch(`${import.meta.env.VITE_GATEWAY_BASE}/api/tenants/${encodeURIComponent(orgId)}/merge`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-api-key': import.meta.env.VITE_GATEWAY_API_KEY || '' },
+        body: JSON.stringify({ head, base: 'main' })
+      });
+      const j = await res.json();
+      if (!res.ok || !j.ok) throw new Error(j.error || res.statusText);
+      setMsg(`Gemerged: ${head} → ${j.base} (${j.mergeSha?.slice(0,7) || ''})`);
+    } catch (e) {
+      setErr(`Merge fehlgeschlagen: ${e.message}`);
+    } finally { setBusy(false); }
+  }
 
   function onChange(e) {
     const { name, value } = e.target;
@@ -108,11 +146,16 @@ export default function TenantSetup() {
           >
             Laden
           </button>
-          <button
-            onClick={onSave}
-            disabled={busy || !tenant}
-            className="w-full rounded-lg border px-3 py-2 hover:bg-slate-50 disabled:opacity-50"
-          >
+          <button 
+            className="w-full rounded-lg bg-blue-600 text-white px-3 py-2 hover:bg-blue-700 disabled:opacity-50" 
+            onClick={handleDraftSave} 
+            disabled={busy || !orgId}>
+            Entwurf speichern
+          </button>
+          <button 
+            className="w-full rounded-lg bg-blue-600 text-white px-3 py-2 hover:bg-blue-700 disabled:opacity-50" 
+            onClick={handleSaveAndMerge} 
+            disabled={busy || !orgId}>
             Speichern
           </button>
           <button
