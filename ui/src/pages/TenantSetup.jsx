@@ -153,13 +153,13 @@ export default function TenantSetup() {
           <button 
             className="w-full rounded-lg bg-blue-600 text-white px-3 py-2 hover:bg-blue-700 disabled:opacity-50" 
             onClick={handleDraftSave} 
-            disabled={busy || !activeOrg}>
+            disabled={busy || !getOrgId()}>
             Entwurf speichern
           </button>
           <button 
             className="w-full rounded-lg bg-blue-600 text-white px-3 py-2 hover:bg-blue-700 disabled:opacity-50" 
             onClick={handleSaveAndMerge} 
-            disabled={busy || !activeOrg}>
+            disabled={busy || !getOrgId()}>
             Speichern
           </button>
           <button
