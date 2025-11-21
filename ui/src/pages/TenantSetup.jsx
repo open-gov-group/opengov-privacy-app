@@ -1,9 +1,8 @@
 // src/pages/TenantSetup.jsx
 import React, { useMemo, useState } from 'react';
-import { buildOrgId, setOrgId, getTenant, initTenant, updateTenant, ensureTenant } from '@/lib/tenantApi';
-import { setOrgId } from '@/lib/orgId';
-import { getOrgId } from '@/lib/orgId';
-const activeOrg = getOrgId();
+import { buildOrgId, getTenant, initTenant, updateTenant, ensureTenant } from '@/lib/tenantApi';
+import { setOrgId, getOrgId } from '@/lib/orgId';
+import { getGlobalFromTenant, applyGlobalToTenant } from '@/lib/tenantShape';
 
 export default function TenantSetup() {
   // LEFT: Org form (ID parts)
@@ -15,6 +14,7 @@ export default function TenantSetup() {
     townName: 'DUESSELDORF'
   });
 
+  const activeOrg = getOrgId();
   const orgIdPreview = useMemo(() => buildOrgId(form), [form]);
 
   // Loaded/created tenant (editable)
@@ -27,10 +27,6 @@ export default function TenantSetup() {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState('');
   const [err, setErr] = useState('');
-
-
-
-
 
   async function handleDraftSave() {
     setBusy(true); setMsg(''); setErr('');
@@ -203,30 +199,176 @@ function LabeledInput({ label, ...rest }) {
   );
 }
 
-// very simple JSON editor for tenant.json (you can replace later with form fields)
+
+
 function TenantEditor({ tenant, onChange }) {
-  const [text, setText] = useState(JSON.stringify(tenant, null, 2));
+  const [tab, setTab] = useState('form'); // 'form' | 'json'
+
+  // Form-State aus tenant ableiten
+  const [form, setForm] = useState(() => getGlobalFromTenant(tenant));
+  const [jsonText, setJsonText] = useState(JSON.stringify(tenant, null, 2));
   const [err, setErr] = useState('');
 
-  function onText(v) {
-    setText(v);
+  // Wenn sich "tenant" von außen ändert → Form + JSON neu setzen
+  useEffect(() => {
+    setForm(getGlobalFromTenant(tenant));
+    setJsonText(JSON.stringify(tenant, null, 2));
+    setErr('');
+  }, [tenant]);
+
+  // Form → tenant.json zurückschreiben & nach oben geben
+  function commitForm(nextForm) {
+    setForm(nextForm);
+    const nextTenant = applyGlobalToTenant(tenant, nextForm);
+    onChange(nextTenant);
+    setJsonText(JSON.stringify(nextTenant, null, 2));
+  }
+
+  function onJsonChange(v) {
+    setJsonText(v);
     try {
       const parsed = JSON.parse(v);
       setErr('');
       onChange(parsed);
+      setForm(getGlobalFromTenant(parsed));
     } catch (e) {
       setErr('Ungültiges JSON – bitte korrigieren.');
     }
   }
 
   return (
-    <div className="space-y-2">
-      <textarea
-        value={text}
-        onChange={e => onText(e.target.value)}
-        className="w-full h-64 border rounded-lg font-mono text-xs p-2"
-      />
-      {err && <div className="text-xs text-red-700">{err}</div>}
+    <div className="space-y-3">
+      {/* Tabs */}
+      <div className="flex gap-2">
+        <button
+          className={`px-3 py-1 rounded ${tab==='form' ? 'bg-blue-600 text-white' : 'border'}`}
+          onClick={() => setTab('form')}
+        >
+          Formular
+        </button>
+        <button
+          className={`px-3 py-1 rounded ${tab==='json' ? 'bg-blue-600 text-white' : 'border'}`}
+          onClick={() => setTab('json')}
+        >
+          JSON
+        </button>
+      </div>
+
+      {tab === 'form' ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* linke Spalte */}
+          <fieldset className="space-y-2 border rounded-lg p-3">
+            <legend className="text-sm font-semibold px-1">Allgemein</legend>
+            <LabelInput
+              label="Titel"
+              value={form.title}
+              onChange={v => commitForm({ ...form, title: v })}
+            />
+            <LabelTextarea
+              label="Beschreibung"
+              value={form.description}
+              onChange={v => commitForm({ ...form, description: v })}
+              rows={4}
+            />
+          </fieldset>
+
+          {/* rechte Spalte */}
+          <fieldset className="space-y-2 border rounded-lg p-3">
+            <legend className="text-sm font-semibold px-1">Adresse/Organisation</legend>
+            <LabelInput
+              label="Organisation"
+              value={form.address.organization}
+              onChange={v => commitForm({ ...form, address: { ...form.address, organization: v } })}
+            />
+            <LabelInput
+              label="Straße"
+              value={form.address.street}
+              onChange={v => commitForm({ ...form, address: { ...form.address, street: v } })}
+            />
+            <div className="grid grid-cols-3 gap-2">
+              <LabelInput
+                label="PLZ"
+                value={form.address.postalCode}
+                onChange={v => commitForm({ ...form, address: { ...form.address, postalCode: v } })}
+              />
+              <LabelInput
+                label="Ort"
+                value={form.address.city}
+                onChange={v => commitForm({ ...form, address: { ...form.address, city: v } })}
+              />
+              <LabelInput
+                label="Land"
+                value={form.address.country}
+                onChange={v => commitForm({ ...form, address: { ...form.address, country: v } })}
+              />
+            </div>
+            <LabelInput
+              label="Webseite"
+              value={form.address.website}
+              onChange={v => commitForm({ ...form, address: { ...form.address, website: v } })}
+            />
+          </fieldset>
+
+          <fieldset className="space-y-2 border rounded-lg p-3">
+            <legend className="text-sm font-semibold px-1">System Owner</legend>
+            <LabelInput label="Name"  value={form.owner.name}  onChange={v => commitForm({ ...form, owner: { ...form.owner, name: v } })}/>
+            <LabelInput label="E-Mail" value={form.owner.email} onChange={v => commitForm({ ...form, owner: { ...form.owner, email: v } })}/>
+            <LabelInput label="Telefon" value={form.owner.phone} onChange={v => commitForm({ ...form, owner: { ...form.owner, phone: v } })}/>
+          </fieldset>
+
+          <fieldset className="space-y-2 border rounded-lg p-3">
+            <legend className="text-sm font-semibold px-1">Datenschutzbeauftragte:r (DPO)</legend>
+            <LabelInput label="Name"  value={form.dpo.name}  onChange={v => commitForm({ ...form, dpo: { ...form.dpo, name: v } })}/>
+            <LabelInput label="E-Mail" value={form.dpo.email} onChange={v => commitForm({ ...form, dpo: { ...form.dpo, email: v } })}/>
+            <LabelInput label="Telefon" value={form.dpo.phone} onChange={v => commitForm({ ...form, dpo: { ...form.dpo, phone: v } })}/>
+          </fieldset>
+
+          <fieldset className="space-y-2 border rounded-lg p-3">
+            <legend className="text-sm font-semibold px-1">Informationssicherheitsbeauftragte:r (ISO)</legend>
+            <LabelInput label="Name"  value={form.iso.name}  onChange={v => commitForm({ ...form, iso: { ...form.iso, name: v } })}/>
+            <LabelInput label="E-Mail" value={form.iso.email} onChange={v => commitForm({ ...form, iso: { ...form.iso, email: v } })}/>
+            <LabelInput label="Telefon" value={form.iso.phone} onChange={v => commitForm({ ...form, iso: { ...form.iso, phone: v } })}/>
+          </fieldset>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          <textarea
+            value={jsonText}
+            onChange={e => onJsonChange(e.target.value)}
+            className="w-full h-72 border rounded-lg font-mono text-xs p-2"
+          />
+          {err && <div className="text-xs text-red-700">{err}</div>}
+        </div>
+      )}
     </div>
   );
 }
+
+function LabelInput({ label, value, onChange, ...rest }) {
+  return (
+    <label className="text-sm grid gap-1">
+      <span className="text-slate-600">{label}</span>
+      <input
+        className="border rounded-lg px-2 py-1 outline-none focus:ring-2 ring-blue-500"
+        value={value ?? ''}
+        onChange={e => onChange(e.target.value)}
+        {...rest}
+      />
+    </label>
+  );
+}
+function LabelTextarea({ label, value, onChange, rows=3 }) {
+  return (
+    <label className="text-sm grid gap-1">
+      <span className="text-slate-600">{label}</span>
+      <textarea
+        className="border rounded-lg px-2 py-1 outline-none focus:ring-2 ring-blue-500"
+        rows={rows}
+        value={value ?? ''}
+        onChange={e => onChange(e.target.value)}
+      />
+    </label>
+  );
+}
+
+
