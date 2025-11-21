@@ -33,16 +33,39 @@ export default function TenantSetup() {
     setBusy(true); setMsg(''); setErr('');
     try {
       const oid = getOrgId();               // globale, gültige OrgID
-      const ref = branch || `feature/${oid}-tenant`;
-      const res = await fetch(`${import.meta.env.VITE_GATEWAY_BASE}/api/tenants/${encodeURIComponent(oid)}/save?ref=${encodeURIComponent(ref)}`, {
+      let currentRef = branch || `feature/${oid}-tenant`;
+      let res = await fetch(`${import.meta.env.VITE_GATEWAY_BASE}/api/tenants/${encodeURIComponent(oid)}/save?ref=${encodeURIComponent(currentRef)}`, {
         method: 'PUT',
         headers: { 'content-type': 'application/json', 'x-api-key': import.meta.env.VITE_GATEWAY_API_KEY || '' },
         body: JSON.stringify(tenant)
       });
-      const j = await res.json();
-      if (!res.ok || !j.ok) throw new Error(j.error || res.statusText);
-      setBranch(j.branch || ref);
-      setMsg(`Entwurf gespeichert @ ${j.branch}${j.prUrl ? ` (PR: ${j.prUrl})` : ''}`);
+      let j = await res.json();
+
+      // Falls Tenant/Branch noch nicht existiert: einmal initialisieren und erneut speichern
+      if ((res.status === 404 || j?.error === 'not_found')) {
+          const init = await ensureTenant({
+          orgId: oid,
+          title: tenant?.['system-security-plan']?.metadata?.title || oid,
+          // optional: gewähltes Profil durchreichen
+            defaultProfileHref: selectedProfile || undefined
+         });
+       if (!init?.ok) throw new Error(init?.error || 'init failed');
+          // Branch aus init übernehmen (oder fallback)
+          currentRef = init.branch || currentRef;
+          setBranch(currentRef);
+
+          // zweiter Versuch: speichern
+          res = await fetch(`${import.meta.env.VITE_GATEWAY_BASE}/api/tenants/${encodeURIComponent(oid)}/save?ref=${encodeURIComponent(currentRef)}`, {
+            method: 'PUT',
+            headers: { 'content-type': 'application/json', 'x-api-key': import.meta.env.VITE_GATEWAY_API_KEY || '' },
+            body: JSON.stringify(tenant)
+          });
+          j = await res.json();
+        }
+
+        if (!res.ok || !j?.ok) throw new Error(j?.error || res.statusText);
+        setBranch(j.branch || currentRef);
+        setMsg(`Entwurf gespeichert @ ${j.branch || currentRef}${j.prUrl ? ` (PR: ${j.prUrl})` : ''}`);
     } catch (e) {
       setErr(`Draft speichern fehlgeschlagen: ${e.message}`);
     } finally { setBusy(false); }
