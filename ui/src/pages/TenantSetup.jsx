@@ -1,6 +1,9 @@
 // src/pages/TenantSetup.jsx
 import React, { useMemo, useState } from 'react';
-import { buildOrgId, getTenant, initTenant, updateTenant, ensureTenant } from '@/lib/tenantApi';
+import { buildOrgId, setOrgId, getTenant, initTenant, updateTenant, ensureTenant } from '@/lib/tenantApi';
+import { setOrgId } from '@/lib/orgId';
+import { getOrgId } from '@/lib/orgId';
+const activeOrg = getOrgId();
 
 export default function TenantSetup() {
   // LEFT: Org form (ID parts)
@@ -24,6 +27,10 @@ export default function TenantSetup() {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState('');
   const [err, setErr] = useState('');
+
+
+
+
 
   async function handleDraftSave() {
     setBusy(true); setMsg(''); setErr('');
@@ -67,11 +74,12 @@ export default function TenantSetup() {
 
   async function onLoad() {
     setBusy(true); setMsg(''); setErr('');
-    const orgId = orgIdPreview;
+    const tenantId = orgIdPreview;
     try {
-      const t = await getTenant(orgId);
+      const t = await getTenant(tenantId);
       setTenant(t);
-      setMsg(`Tenant geladen: ${orgId}`);
+      setMsg(`Tenant geladen: ${tenantId}`);
+      setOrgId(tenantId);
     } catch (e) {
       setTenant(null);
       setErr(`Laden fehlgeschlagen: ${String(e.message || e)}`);
@@ -149,13 +157,13 @@ export default function TenantSetup() {
           <button 
             className="w-full rounded-lg bg-blue-600 text-white px-3 py-2 hover:bg-blue-700 disabled:opacity-50" 
             onClick={handleDraftSave} 
-            disabled={busy || !orgId}>
+            disabled={busy || !activeOrg}>
             Entwurf speichern
           </button>
           <button 
             className="w-full rounded-lg bg-blue-600 text-white px-3 py-2 hover:bg-blue-700 disabled:opacity-50" 
             onClick={handleSaveAndMerge} 
-            disabled={busy || !orgId}>
+            disabled={busy || !activeOrg}>
             Speichern
           </button>
           <button
