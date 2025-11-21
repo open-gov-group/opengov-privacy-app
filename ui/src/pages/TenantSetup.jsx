@@ -43,12 +43,17 @@ export default function TenantSetup() {
 
       // Falls Tenant/Branch noch nicht existiert: einmal initialisieren und erneut speichern
       if ((res.status === 404 || j?.error === 'not_found')) {
-          const init = await ensureTenant({
+        // Profil aus aktuellem Tenant lesen oder auf ENV-Default zurückfallen
+        const profileHref =
+          tenant?.['system-security-plan']?.['import-profile']?.href
+          || import.meta.env.VITE_DEFAULT_PROFILE_HREF
+          || undefined;
+
+        const init = await ensureTenant({
           orgId: oid,
           title: tenant?.['system-security-plan']?.metadata?.title || oid,
-          // optional: gewähltes Profil durchreichen
-            defaultProfileHref: selectedProfile || undefined
-         });
+          defaultProfileHref: profileHref
+        });
        if (!init?.ok) throw new Error(init?.error || 'init failed');
           // Branch aus init übernehmen (oder fallback)
           currentRef = init.branch || currentRef;
