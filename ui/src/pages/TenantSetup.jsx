@@ -34,7 +34,7 @@ export default function TenantSetup() {
     try {
       const oid = getOrgId();               // globale, gültige OrgID
       const ref = branch || `feature/${oid}-tenant`;
-      const res = await fetch(`${import.meta.env.VITE_GATEWAY_BASE}/api/tenants/${encodeURIComponent(orgId)}/save?ref=${encodeURIComponent(ref)}`, {
+      const res = await fetch(`${import.meta.env.VITE_GATEWAY_BASE}/api/tenants/${encodeURIComponent(oid)}/save?ref=${encodeURIComponent(ref)}`, {
         method: 'PUT',
         headers: { 'content-type': 'application/json', 'x-api-key': import.meta.env.VITE_GATEWAY_API_KEY || '' },
         body: JSON.stringify(tenant)
@@ -53,7 +53,7 @@ export default function TenantSetup() {
     try {
       const oid = getOrgId();
       const head = branch || `feature/${oid}-tenant`;
-      const res = await fetch(`${import.meta.env.VITE_GATEWAY_BASE}/api/tenants/${encodeURIComponent(orgId)}/merge`, {
+      const res = await fetch(`${import.meta.env.VITE_GATEWAY_BASE}/api/tenants/${encodeURIComponent(oid)}/merge`, {
         method: 'POST',
         headers: { 'content-type': 'application/json', 'x-api-key': import.meta.env.VITE_GATEWAY_API_KEY || '' },
         body: JSON.stringify({ head, base: 'main' })
