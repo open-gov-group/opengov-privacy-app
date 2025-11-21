@@ -1,7 +1,7 @@
 // src/pages/TenantSetup.jsx
 import React, { useEffect, useMemo, useState } from 'react';
 import { buildOrgId, getTenant, initTenant, updateTenant, ensureTenant } from '@/lib/tenantApi';
-import { setOrgId, getOrgId } from '@/lib/orgId';
+import { setOrgId as setGlobalOrgId, getOrgId } from '@/lib/orgId';
 import { getGlobalFromTenant, applyGlobalToTenant } from '@/lib/tenantShape';
 
 export default function TenantSetup() {
@@ -21,7 +21,8 @@ export default function TenantSetup() {
   const [tenant, setTenant] = useState(null);
 
   // UI state
-  const [orgId, setOrgId] = useState('');
+  const [orgIdLocal, setOrgIdLocal] = useState('');
+  
   const [branch, setBranch] = useState(''); // optional: vorgeschlagen/zuletzt benutzt
 
   const [busy, setBusy] = useState(false);
@@ -31,7 +32,8 @@ export default function TenantSetup() {
   async function handleDraftSave() {
     setBusy(true); setMsg(''); setErr('');
     try {
-      const ref = branch || `feature/${orgId}-tenant`;
+      const oid = getOrgId();               // globale, gültige OrgID
+      const ref = branch || `feature/${oid}-tenant`;
       const res = await fetch(`${import.meta.env.VITE_GATEWAY_BASE}/api/tenants/${encodeURIComponent(orgId)}/save?ref=${encodeURIComponent(ref)}`, {
         method: 'PUT',
         headers: { 'content-type': 'application/json', 'x-api-key': import.meta.env.VITE_GATEWAY_API_KEY || '' },
@@ -49,7 +51,8 @@ export default function TenantSetup() {
   async function handleSaveAndMerge() {
     setBusy(true); setMsg(''); setErr('');
     try {
-      const head = branch || `feature/${orgId}-tenant`;
+      const oid = getOrgId();
+      const head = branch || `feature/${oid}-tenant`;
       const res = await fetch(`${import.meta.env.VITE_GATEWAY_BASE}/api/tenants/${encodeURIComponent(orgId)}/merge`, {
         method: 'POST',
         headers: { 'content-type': 'application/json', 'x-api-key': import.meta.env.VITE_GATEWAY_API_KEY || '' },
@@ -75,7 +78,8 @@ export default function TenantSetup() {
       const t = await getTenant(tenantId);
       setTenant(t);
       setMsg(`Tenant geladen: ${tenantId}`);
-      setOrgId(tenantId);
+      setOrgIdLocal(tenantId);     // nur UI
+      setGlobalOrgId(tenantId);    // ✅ globale OrgID für Buttons/Actions
     } catch (e) {
       setTenant(null);
       setErr(`Laden fehlgeschlagen: ${String(e.message || e)}`);
@@ -95,6 +99,8 @@ export default function TenantSetup() {
         setTenant(out.tenant); // kann null sein, wenn direkt nach Init noch nicht lesbar
         setMsg(`Organisation angelegt: ${out.orgId}` + (out.prUrl ? ` – PR: ${out.prUrl}` : ''));
       }
+      setOrgIdLocal(out.orgId);
+      setGlobalOrgId(out.orgId);   // ✅ globale OrgID setzen
     } catch (e) {
       setErr(`Anlegen fehlgeschlagen: ${String(e.message || e)}`);
     } finally {
