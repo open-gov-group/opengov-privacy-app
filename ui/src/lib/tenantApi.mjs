@@ -10,24 +10,30 @@ export function buildOrgId({ euCode='EU', stateCode='DE', countyCode='', townId=
 }
 
 async function fetchJson(url, init) {
-  const r = await fetch(url, { ...init, headers: { 'content-type':'application/json', ...(init?.headers||{}) } });
-  if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
+  const r = await fetch(url, {
+    ...init,
+    headers: { 'content-type':'application/json', ...(init?.headers||{}) }
+  });
+  if (!r.ok) {
+    let detail = '';
+    try { detail = JSON.stringify(await r.json()); } catch {}
+    throw new Error(`${r.status} ${r.statusText}${detail ? ` - ${detail}` : ''}`);
+  }
   return r.json();
 }
 
-// Tenant lesen (falls bereits angelegt)
+// GET /api/tenants/:orgId  → returns tenant.json (or 404)
 export async function getTenant(orgId) {
   return fetchJson(`${BASE}/api/tenants/${encodeURIComponent(orgId)}`, { method: 'GET' });
 }
 
-// Tenant anlegen (init) – form -> orgId -> POST /init
+// POST /api/tenants/:orgId/init  → creates minimal tenant + PR, returns links
 export async function initTenant(form) {
   const orgId = buildOrgId(form);
   const res = await fetchJson(`${BASE}/api/tenants/${encodeURIComponent(orgId)}/init`, {
     method: 'POST',
     body: JSON.stringify(form)
   });
-  // UI-freundliche Form zurückgeben
   return {
     ok: !!res.ok,
     orgId,
@@ -38,14 +44,29 @@ export async function initTenant(form) {
   };
 }
 
-// „Laden oder anlegen“ – wenn vorhanden, laden, sonst init
+// PUT /api/tenants/:orgId  → update tenant.json (body = full tenant object)
+export async function updateTenant(orgId, tenantObj) {
+  return fetchJson(`${BASE}/api/tenants/${encodeURIComponent(orgId)}`, {
+    method: 'PUT',
+    body: JSON.stringify(tenantObj)
+  });
+}
+
+// “Load or create”
 export async function ensureTenant(form) {
   const orgId = buildOrgId(form);
   try {
     const existing = await getTenant(orgId);
-    return { ok:true, orgId, exists:true, data: existing };
+    return { ok:true, orgId, exists:true, tenant: existing };
   } catch {
     const created = await initTenant(form);
-    return { ...created, exists:false };
+    if (!created.ok) throw new Error('Init failed');
+    // nach init direkt den frisch erzeugten tenant lesen (falls Gateway das unterstützt/ready ist)
+    try {
+      const t = await getTenant(created.orgId);
+      return { ok:true, orgId: created.orgId, exists:false, tenant: t, prUrl: created.prUrl, sspUrl: created.sspUrl };
+    } catch {
+      return { ok:true, orgId: created.orgId, exists:false, tenant: null, prUrl: created.prUrl, sspUrl: created.sspUrl };
+    }
   }
 }

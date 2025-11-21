@@ -1,133 +1,181 @@
-// ui/src/pages/TenantSetup.jsx
-import React, { useState } from 'react';
-import { buildOrgId, ensureTenant } from '@/lib/tenantApi';
-
-const BASE = import.meta.env.VITE_GATEWAY_BASE || '';
+// src/pages/TenantSetup.jsx
+import React, { useMemo, useState } from 'react';
+import { buildOrgId, getTenant, initTenant, updateTenant, ensureTenant } from '@/lib/tenantApi';
 
 export default function TenantSetup() {
+  // LEFT: Org form (ID parts)
   const [form, setForm] = useState({
-    euCode: 'EU', stateCode: 'DE', countyCode: '', townId: '', townName: '',
-    address: { line1: '', zip: '', city: '', state: 'NW', country: 'DE' },
-    website: '', email: '', phone: ''
+    euCode: 'EU',
+    stateCode: 'DE',
+    countyCode: 'NRW',
+    townId: '40213',
+    townName: 'DÜSSELDORF'
   });
-  const [result, setResult] = useState(null);
+
+  const orgIdPreview = useMemo(() => buildOrgId(form), [form]);
+
+  // Loaded/created tenant (editable)
+  const [tenant, setTenant] = useState(null);
+
+  // UI state
   const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState('');
   const [err, setErr] = useState('');
 
-  function onChange(path, value) {
-    setForm(prev => {
-      const clone = structuredClone(prev);
-      const seg = path.split('.');
-      let cur = clone;
-      for (let i=0;i<seg.length-1;i++) cur = cur[seg[i]];
-      cur[seg.at(-1)] = value;
-      return clone;
-    });
+  function onChange(e) {
+    const { name, value } = e.target;
+    setForm(prev => ({ ...prev, [name]: value }));
   }
 
-  async function onSubmit(e){
-    e.preventDefault();
-    setBusy(true); setErr('');
+  async function onLoad() {
+    setBusy(true); setMsg(''); setErr('');
+    const orgId = orgIdPreview;
     try {
-     const outcome = await ensureTenant(form);
-     setResult(outcome);
-
+      const t = await getTenant(orgId);
+      setTenant(t);
+      setMsg(`Tenant geladen: ${orgId}`);
     } catch (e) {
-      setErr(String(e));
+      setTenant(null);
+      setErr(`Laden fehlgeschlagen: ${String(e.message || e)}`);
     } finally {
       setBusy(false);
     }
   }
 
-  const orgIdPreview = buildOrgId({
-    euCode: form.euCode, stateCode: form.stateCode,
-    countyCode: form.countyCode, townId: form.townId, townName: form.townName
-  });
+  async function onCreate() {
+    setBusy(true); setMsg(''); setErr('');
+    try {
+      const out = await ensureTenant(form);
+      if (out.exists) {
+        setTenant(out.tenant);
+        setMsg(`Organisation existiert bereits – geladen: ${out.orgId}`);
+      } else {
+        setTenant(out.tenant); // kann null sein, wenn direkt nach Init noch nicht lesbar
+        setMsg(`Organisation angelegt: ${out.orgId}` + (out.prUrl ? ` – PR: ${out.prUrl}` : ''));
+      }
+    } catch (e) {
+      setErr(`Anlegen fehlgeschlagen: ${String(e.message || e)}`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onSave() {
+    if (!tenant) return;
+    setBusy(true); setMsg(''); setErr('');
+    const orgId = orgIdPreview;
+    try {
+      const saved = await updateTenant(orgId, tenant);
+      setTenant(saved);
+      setMsg('Gespeichert.');
+    } catch (e) {
+      setErr(`Speichern fehlgeschlagen: ${String(e.message || e)}`);
+    } finally {
+      setBusy(false);
+    }
+  }
 
   return (
-    <div className="space-y-6">
-      <h1 className="text-2xl font-semibold">Tenant anlegen</h1>
+    <div className="max-w-6xl mx-auto p-4 space-y-6">
+      <h1 className="text-2xl font-semibold">Tenant Setup</h1>
 
-      <form onSubmit={onSubmit} className="grid gap-4 md:grid-cols-2">
-        <div className="rounded border bg-white p-4 space-y-3">
-          <h2 className="font-semibold">Organisation</h2>
-          <div className="grid grid-cols-2 gap-2">
-            <label className="text-sm">EU Code</label>
-            <input className="border rounded px-2 py-1"
-              value={form.euCode} onChange={e=>onChange('euCode', e.target.value)} />
-            <label className="text-sm">State (DE)</label>
-            <input className="border rounded px-2 py-1"
-              value={form.stateCode} onChange={e=>onChange('stateCode', e.target.value)} />
-            <label className="text-sm">County Code</label>
-            <input className="border rounded px-2 py-1"
-              value={form.countyCode} onChange={e=>onChange('countyCode', e.target.value)} />
-            <label className="text-sm">Town ID</label>
-            <input className="border rounded px-2 py-1"
-              value={form.townId} onChange={e=>onChange('townId', e.target.value)} />
-            <label className="text-sm">Town Name</label>
-            <input className="border rounded px-2 py-1"
-              value={form.townName} onChange={e=>onChange('townName', e.target.value)} />
+      {/* GRID: left form, right actions */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {/* LEFT: OrgId form */}
+        <div className="md:col-span-2 rounded-xl border bg-white p-4 space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <LabeledInput label="EU Code" name="euCode" value={form.euCode} onChange={onChange} />
+            <LabeledInput label="Staatscode" name="stateCode" value={form.stateCode} onChange={onChange} />
+            <LabeledInput label="Region/County" name="countyCode" value={form.countyCode} onChange={onChange} />
+            <LabeledInput label="Town ID" name="townId" value={form.townId} onChange={onChange} />
+            <LabeledInput label="Town/Org Name" name="townName" value={form.townName} onChange={onChange} />
           </div>
-          <div className="text-xs text-gray-600">
-            Vorschau OrgID: <span className="font-mono">{orgIdPreview}</span>
+
+          <div className="text-sm">
+            OrgID Vorschau:&nbsp;
+            <span className="font-mono px-1 py-0.5 rounded bg-slate-100">
+              {orgIdPreview}
+            </span>
           </div>
         </div>
 
-        <div className="rounded border bg-white p-4 space-y-3">
-          <h2 className="font-semibold">Kontakt / Adresse</h2>
-          <div className="grid grid-cols-2 gap-2">
-            <label className="text-sm">Anschrift</label>
-            <input className="border rounded px-2 py-1"
-              value={form.address.line1} onChange={e=>onChange('address.line1', e.target.value)} />
-            <label className="text-sm">PLZ</label>
-            <input className="border rounded px-2 py-1"
-              value={form.address.zip} onChange={e=>onChange('address.zip', e.target.value)} />
-            <label className="text-sm">Ort</label>
-            <input className="border rounded px-2 py-1"
-              value={form.address.city} onChange={e=>onChange('address.city', e.target.value)} />
-            <label className="text-sm">Bundesland</label>
-            <input className="border rounded px-2 py-1"
-              value={form.address.state} onChange={e=>onChange('address.state', e.target.value)} />
-            <label className="text-sm">Land</label>
-            <input className="border rounded px-2 py-1"
-              value={form.address.country} onChange={e=>onChange('address.country', e.target.value)} />
-            <label className="text-sm">Website</label>
-            <input className="border rounded px-2 py-1"
-              value={form.website} onChange={e=>onChange('website', e.target.value)} />
-            <label className="text-sm">E-Mail</label>
-            <input className="border rounded px-2 py-1"
-              value={form.email} onChange={e=>onChange('email', e.target.value)} />
-            <label className="text-sm">Telefon</label>
-            <input className="border rounded px-2 py-1"
-              value={form.phone} onChange={e=>onChange('phone', e.target.value)} />
-          </div>
-        </div>
-
-        <div className="md:col-span-2 flex items-center gap-3">
-          <button disabled={busy} className="rounded bg-blue-600 text-white px-4 py-2">
-            {busy ? 'Wird angelegt…' : 'Tenant anlegen'}
+        {/* RIGHT: actions */}
+        <div className="rounded-xl border bg-white p-4 space-y-3">
+          <button
+            onClick={onLoad}
+            disabled={busy}
+            className="w-full rounded-lg border px-3 py-2 hover:bg-slate-50 disabled:opacity-50"
+          >
+            Laden
           </button>
-          {err && <span className="text-red-700 text-sm">{err}</span>}
-        </div>
-      </form>
+          <button
+            onClick={onSave}
+            disabled={busy || !tenant}
+            className="w-full rounded-lg border px-3 py-2 hover:bg-slate-50 disabled:opacity-50"
+          >
+            Speichern
+          </button>
+          <button
+            onClick={onCreate}
+            disabled={busy}
+            className="w-full rounded-lg bg-blue-600 text-white px-3 py-2 hover:bg-blue-700 disabled:opacity-50"
+          >
+            Anlegen
+          </button>
 
-      {result && (
-        <div className="rounded border bg-white p-4">
-          <div className="font-semibold mb-2">Ergebnis</div>
-          <div className="text-sm">OrgID: <span className="font-mono">{result.orgId}</span></div>
-          <div className="text-sm">Status: {result.exists ? 'bereits vorhanden' : 'neu angelegt'}</div>
-          {result.prUrl && (
-            <div className="text-sm">PR:&nbsp;
-              <a className="text-blue-700 underline" href={result.prUrl} target="_blank" rel="noreferrer">{result.prUrl}</a>
-            </div>
-          )}
-          {result.sspUrl && (
-            <div className="text-sm">SSP (raw):&nbsp;
-              <a className="text-blue-700 underline" href={result.sspUrl} target="_blank" rel="noreferrer">{result.sspUrl}</a>
-            </div>
-          )}
+          {busy && <div className="text-xs text-slate-500">Bitte warten…</div>}
+          {!!msg && <div className="text-xs text-green-700">{msg}</div>}
+          {!!err && <div className="text-xs text-red-700">{err}</div>}
+        </div>
+      </div>
+
+      {/* EDIT FORM (appears after load/create) */}
+      {tenant && (
+        <div className="rounded-xl border bg-white p-4">
+          <h2 className="text-lg font-semibold mb-3">Tenant-Daten</h2>
+          <TenantEditor tenant={tenant} onChange={setTenant} />
         </div>
       )}
+    </div>
+  );
+}
+
+function LabeledInput({ label, ...rest }) {
+  return (
+    <label className="text-sm grid gap-1">
+      <span className="text-slate-600">{label}</span>
+      <input
+        className="border rounded-lg px-2 py-1 outline-none focus:ring-2 ring-blue-500"
+        {...rest}
+      />
+    </label>
+  );
+}
+
+// very simple JSON editor for tenant.json (you can replace later with form fields)
+function TenantEditor({ tenant, onChange }) {
+  const [text, setText] = useState(JSON.stringify(tenant, null, 2));
+  const [err, setErr] = useState('');
+
+  function onText(v) {
+    setText(v);
+    try {
+      const parsed = JSON.parse(v);
+      setErr('');
+      onChange(parsed);
+    } catch (e) {
+      setErr('Ungültiges JSON – bitte korrigieren.');
+    }
+  }
+
+  return (
+    <div className="space-y-2">
+      <textarea
+        value={text}
+        onChange={e => onText(e.target.value)}
+        className="w-full h-64 border rounded-lg font-mono text-xs p-2"
+      />
+      {err && <div className="text-xs text-red-700">{err}</div>}
     </div>
   );
 }
