@@ -16,11 +16,12 @@ export default function TenantSetup() {
 
   const activeOrg = getOrgId();
   const orgIdPreview = useMemo(() => buildOrgId(form), [form]);
-  const canAct = !!tenant && !!getOrgId();   // <— Guard für Buttons
+ 
 
   // Loaded/created tenant (editable)
   const [tenant, setTenant] = useState(null);
-
+  const canAct = !!tenant && !!getOrgId();   // <— Guard für Buttons
+  
   // UI state
   const [orgIdLocal, setOrgIdLocal] = useState('');
   
