@@ -72,14 +72,14 @@ export async function ensureTenant(form) {
 }
 
 export async function saveDraft(orgId, tenantObj, { ref } = {}) {
-  const qs = q({ ref });
+  const qs = ref ? `?${new URLSearchParams({ ref }).toString()}` : '';
   return fetchJson(`${BASE}/api/tenants/${encodeURIComponent(orgId)}/save${qs}`, {
     method: 'PUT',
     body: JSON.stringify(tenantObj)
   });
 }
 
-// 🔹 NEU: Merge (head → base)
+// Merge (head → base)
 export async function mergeBranch(orgId, { head, base='main' }) {
   return fetchJson(`${BASE}/api/tenants/${encodeURIComponent(orgId)}/merge`, {
     method: 'POST',
