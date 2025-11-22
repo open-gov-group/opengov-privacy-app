@@ -33,7 +33,8 @@ export default function TenantSetup() {
     setBusy(true); setMsg(''); setErr('');
     try {
       const oid = getOrgId();               // globale, gültige OrgID
-      if (!oid) throw new Error('Keine gültige OrgID gesetzt. Bitte zuerst laden/anjegen.');+     let currentRef = branch || `feature/${oid}-tenant`;
+      if (!oid) throw new Error('Keine gültige OrgID gesetzt. Bitte zuerst laden/anjegen.');
+      let currentRef = branch || `feature/${oid}-tenant`;
       let j;
       try {
         j = await saveDraft(oid, tenant, { ref: currentRef });
