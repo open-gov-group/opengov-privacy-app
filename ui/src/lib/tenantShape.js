@@ -1,102 +1,169 @@
-// Extrahiert "globale" Felder (Titel, Beschreibung, Adresse, Rollen/Ansprechpersonen) aus tenant.json
-export function getGlobalFromTenant(tenant = {}) {
-  const md = tenant?.metadata ?? {};
-  const parties = Array.isArray(md.parties) ? md.parties : [];
-  const resp = Array.isArray(md['responsible-parties']) ? md['responsible-parties'] : [];
+// /src/lib/tenantShape.mjs
 
-  const title = md.title ?? '';
-  const description = md.description ?? '';
+// Hilfsleser – holt erstes Feld per Pfadkette
+function pick(obj, path, dflt = undefined) {
+  try {
+    return path.split('.').reduce((o, k) => (o && k in o ? o[k] : undefined), obj) ?? dflt;
+  } catch { return dflt; }
+}
 
-  // einfache Adress-Struktur (du kannst es später verfeinern)
-  const address = md.address ?? {
-    organization: '',
-    street: '',
-    postalCode: '',
-    city: '',
-    country: 'DE',
-    website: ''
+// Party-Helfer (OSCAL)
+function findPartyByRole(ssp, roleId) {
+  const rp = pick(ssp, 'system-security-plan.metadata.responsible-parties', []);
+  const parties = pick(ssp, 'system-security-plan.metadata.parties', []);
+  const role = rp.find(r => r['role-id'] === roleId);
+  const pUuid = role?.['party-uuids']?.[0];
+  return parties.find(p => p.uuid === pUuid);
+}
+
+export function getGlobalFromTenant(input) {
+  // 1) Direktes Tenant-Objekt?
+  if (input && !input['system-security-plan']) {
+    const t = input || {};
+    return {
+      title: t.title ?? '',
+      description: t.description ?? '',
+      address: {
+        organization: t.address?.organization ?? '',
+        street:       t.address?.street ?? '',
+        postalCode:   t.address?.postalCode ?? '',
+        city:         t.address?.city ?? '',
+        country:      t.address?.country ?? '',
+        website:      t.address?.website ?? ''
+      },
+      owner: {
+        name:  t.owner?.name ?? '',
+        email: t.owner?.email ?? '',
+        phone: t.owner?.phone ?? ''
+      },
+      dpo: {
+        name:  t.dpo?.name ?? '',
+        email: t.dpo?.email ?? '',
+        phone: t.dpo?.phone ?? ''
+      },
+      iso: {
+        name:  t.iso?.name ?? '',
+        email: t.iso?.email ?? '',
+        phone: t.iso?.phone ?? ''
+      }
+    };
+  }
+
+  // 2) OSCAL-SSP
+  const ssp = input?.['system-security-plan'] ?? {};
+  const md  = ssp.metadata ?? {};
+  // Rollen-IDs passend zu deinem Formular
+  const owner = findPartyByRole(input, 'owner') || {};
+  const dpo   = findPartyByRole(input, 'dpo')   || {};
+  const iso   = findPartyByRole(input, 'iso')   || {};
+
+  // Adresse: wir erlauben Props auf der Owner-Party oder einfache Felder in md.props (fallback)
+  const addr = {
+    organization: owner.name ?? md.title ?? '',
+    street:       (owner['addresses']?.[0]?.['addr-lines']?.[0]) ?? '',
+    postalCode:   (owner['addresses']?.[0]?.['postal-code']) ?? '',
+    city:         (owner['addresses']?.[0]?.city) ?? '',
+    country:      (owner['addresses']?.[0]?.country) ?? '',
+    website:      (owner['links']?.find(l => (l.rel||'').includes('website'))?.href) ?? ''
   };
 
-  // Hilfsfunktion: Party nach Rolle finden
-  const byRole = (roleId) => {
-    const r = resp.find(rp => rp['role-id'] === roleId);
-    const puuid = r?.['party-uuids']?.[0];
-    return parties.find(p => p.uuid === puuid) ?? null;
-  };
-
-  const owner = byRole('owner') ?? {};
-  const dpo   = byRole('dpo') ?? {};
-  const iso   = byRole('iso') ?? {};
-
-  const pickContact = (p) => ({
-    name: p?.name ?? '',
-    email: (p?.['email-addresses'] ?? [])[0] ?? '',
-    phone: (p?.telephones ?? [])[0] ?? ''
-  });
+  function contactFromParty(p) {
+    const email = (p['email-addresses']?.[0]) ?? '';
+    const phone = (p['telephone-numbers']?.[0]?.['number']) ?? '';
+    return { name: p.name ?? '', email, phone };
+  }
 
   return {
-    title,
-    description,
-    address,
-    owner: pickContact(owner),
-    dpo: pickContact(dpo),
-    iso: pickContact(iso),
+    title: md.title ?? '',
+    description: pick(ssp, 'system-characteristics.description', ''),
+    address: addr,
+    owner: contactFromParty(owner),
+    dpo:   contactFromParty(dpo),
+    iso:   contactFromParty(iso)
   };
 }
 
-// Schreibt Formwerte deterministisch in tenant.json zurück
-export function applyGlobalToTenant(tenant = {}, form = {}) {
-  const out = structuredClone(tenant);
-  out.metadata = out.metadata ?? {};
-  const md = out.metadata;
+export function applyGlobalToTenant(original, form) {
+  // 1) Direktes Tenant-Objekt
+  if (original && !original['system-security-plan']) {
+    const prev = original || {};
+    return {
+      ...prev,
+      title: form.title ?? '',
+      description: form.description ?? '',
+      address: {
+        ...(prev.address || {}),
+        organization: form.address?.organization ?? '',
+        street:       form.address?.street ?? '',
+        postalCode:   form.address?.postalCode ?? '',
+        city:         form.address?.city ?? '',
+        country:      form.address?.country ?? '',
+        website:      form.address?.website ?? ''
+      },
+      owner: { ...(prev.owner||{}), ...(form.owner||{}) },
+      dpo:   { ...(prev.dpo||{}),   ...(form.dpo||{})   },
+      iso:   { ...(prev.iso||{}),   ...(form.iso||{})   }
+    };
+  }
+
+  // 2) OSCAL-SSP – nur „globale“ Felder zurückschreiben
+  const ssp = { ...(original?.['system-security-plan'] || {}) };
+  const md  = { ...(ssp.metadata || {}) };
+  const sc  = { ...(ssp['system-characteristics'] || {}) };
 
   md.title = form.title ?? md.title ?? '';
-  md.description = form.description ?? md.description ?? '';
-  md.address = {
-    organization: form.address?.organization ?? md.address?.organization ?? '',
-    street:       form.address?.street       ?? md.address?.street ?? '',
-    postalCode:   form.address?.postalCode   ?? md.address?.postalCode ?? '',
-    city:         form.address?.city         ?? md.address?.city ?? '',
-    country:      form.address?.country      ?? md.address?.country ?? 'DE',
-    website:      form.address?.website      ?? md.address?.website ?? '',
-  };
+  sc.description = form.description ?? sc.description ?? '';
 
-  md.parties = Array.isArray(md.parties) ? md.parties : [];
-  md['responsible-parties'] = Array.isArray(md['responsible-parties']) ? md['responsible-parties'] : [];
+  // owner/dpo/iso in parties/responsible-parties aktualisieren/erzeugen
+  const parties = Array.isArray(md.parties) ? [...md.parties] : [];
+  const rp      = Array.isArray(md['responsible-parties']) ? [...md['responsible-parties']] : [];
 
-  // Hilfswriter: sichert Party zu einer role-id
-  function upsertRole(roleId, contact) {
-    if (!contact) return;
-    // Partei auffinden/erzeugen
-    const rpList = md['responsible-parties'];
-    const pList  = md.parties;
-
-    let rp = rpList.find(r => r['role-id'] === roleId);
-    // existierende Party-UUID holen oder anlegen
-    let partyUuid = rp?.['party-uuids']?.[0];
-    let party = partyUuid ? pList.find(p => p.uuid === partyUuid) : null;
-
-    if (!party) {
-      partyUuid = crypto.randomUUID();
-      party = { uuid: partyUuid, type: 'person', name: '' };
-      pList.push(party);
+  function upsertParty(roleId, person) {
+    if (!person) return;
+    // exists?
+    const role = rp.find(r => r['role-id'] === roleId);
+    let p;
+    if (role?.['party-uuids']?.[0]) {
+      p = parties.find(pp => pp.uuid === role['party-uuids'][0]);
     }
+    if (!p) {
+      p = { uuid: crypto.randomUUID(), type: 'person', name: person.name || roleId };
+      parties.push(p);
+      const rEntry = role || { 'role-id': roleId, 'party-uuids': [] };
+      if (!role) rp.push(rEntry);
+      rEntry['party-uuids'] = [p.uuid];
+    }
+    p.name = person.name || p.name || roleId;
+    p['email-addresses'] = person.email ? [person.email] : (p['email-addresses']||[]);
+    p['telephone-numbers'] = person.phone ? [{ number: person.phone }] : (p['telephone-numbers']||[]);
+  }
 
-    party.name = contact.name ?? party.name ?? '';
-    party['email-addresses'] = contact.email ? [contact.email] : [];
-    party.telephones = contact.phone ? [contact.phone] : [];
+  upsertParty('owner', form.owner);
+  upsertParty('dpo',   form.dpo);
+  upsertParty('iso',   form.iso);
 
-    if (!rp) {
-      rp = { 'role-id': roleId, 'party-uuids': [partyUuid] };
-      rpList.push(rp);
-    } else {
-      rp['party-uuids'] = [partyUuid];
+  // Adresse an owner hängen (wenn vorhanden)
+  const ownerRole = rp.find(r => r['role-id'] === 'owner');
+  const ownerUuid = ownerRole?.['party-uuids']?.[0];
+  const ownerParty = parties.find(pp => pp.uuid === ownerUuid);
+  if (ownerParty) {
+    ownerParty.addresses = [{
+      'addr-lines': [form.address?.street || ''].filter(Boolean),
+      'postal-code': form.address?.postalCode || '',
+      city:   form.address?.city || '',
+      country: form.address?.country || ''
+    }];
+    if (form.address?.website) {
+      ownerParty.links = [{ rel: 'website', href: form.address.website }];
     }
   }
 
-  upsertRole('owner', form.owner);
-  upsertRole('dpo',   form.dpo);
-  upsertRole('iso',   form.iso);
-
-  return out;
+  return {
+    ...original,
+    'system-security-plan': {
+      ...ssp,
+      metadata: { ...md, parties, 'responsible-parties': rp },
+      'system-characteristics': sc
+    }
+  };
 }

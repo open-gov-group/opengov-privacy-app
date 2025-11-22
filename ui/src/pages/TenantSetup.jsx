@@ -87,7 +87,8 @@ export default function TenantSetup() {
     setBusy(true); setMsg(''); setErr('');
     const tenantId = orgIdPreview;
     try {
-      const t = await getTenant(tenantId);
+      const raw = await getTenant(tenantId);
+      const t = raw?.tenant ?? raw;
       setTenant(t);
       setMsg(`Tenant geladen: ${tenantId}`);
       setOrgIdLocal(tenantId);     // nur UI
