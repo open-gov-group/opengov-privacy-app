@@ -17,7 +17,7 @@ async function fetchJson(url, init) {
   if (!r.ok) {
     let detail = '';
     try { detail = JSON.stringify(await r.json()); } catch {}
-    throw new Error(`${r.status} ${r.statusText}${detail ? ` - ${detail}` : ''}`);
+    //throw new Error(`${r.status} ${r.statusText}${detail ? ` - ${detail}` : ''}`);
   }
   return r.json();
 }
