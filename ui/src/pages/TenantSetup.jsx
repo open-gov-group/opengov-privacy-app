@@ -16,6 +16,7 @@ export default function TenantSetup() {
 
   const activeOrg = getOrgId();
   const orgIdPreview = useMemo(() => buildOrgId(form), [form]);
+  const canAct = !!tenant && !!getOrgId();   // <— Guard für Buttons
 
   // Loaded/created tenant (editable)
   const [tenant, setTenant] = useState(null);
@@ -60,13 +61,15 @@ export default function TenantSetup() {
     setBusy(true); setMsg(''); setErr('');
     try {
       const oid = getOrgId();
-      const head = branch || `feature/${oid}-tenant`;
+      if (!oid) throw new Error('Keine gültige OrgID gesetzt.');
+      const head = (branch && branch.trim()) || `feature/${oid}-tenant`;
       const j = await mergeBranch(oid, { head, base: 'main' });
-      setMsg(`Gemerged: ${head} → ${j.base} (${j.mergeSha?.slice(0,7) || ''})`);
+      setMsg(`Gemerged: ${head} → ${j.base}${j.mergeSha ? ` (${j.mergeSha.slice(0,7)})` : ''}`);
     } catch (e) {
       setErr(`Merge fehlgeschlagen: ${e.message}`);
     } finally { setBusy(false); }
   }
+
 
   function onChange(e) {
     const { name, value } = e.target;
@@ -161,13 +164,13 @@ export default function TenantSetup() {
           <button 
             className="w-full rounded-lg bg-blue-600 text-white px-3 py-2 hover:bg-blue-700 disabled:opacity-50" 
             onClick={handleDraftSave} 
-            disabled={busy || !getOrgId()}>
+            disabled={busy || !canAct}>
             Entwurf speichern
           </button>
           <button 
             className="w-full rounded-lg bg-blue-600 text-white px-3 py-2 hover:bg-blue-700 disabled:opacity-50" 
             onClick={handleSaveAndMerge} 
-            disabled={busy || !getOrgId()}>
+            disabled={busy || !canAct}>
             Speichern
           </button>
           <button

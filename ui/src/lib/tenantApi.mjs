@@ -9,18 +9,39 @@ export function buildOrgId({ euCode='EU', stateCode='DE', countyCode='', townId=
   return parts.join('-');
 }
 
+//async function fetchJson(url, init) {
+//  const r = await fetch(url, {
+//    ...init,
+//    headers: { 'content-type':'application/json', ...(init?.headers||{}) }
+//  });
+//  if (!r.ok) {
+//    let detail = '';
+//    try { detail = JSON.stringify(await r.json()); } catch {}
+//    //throw new Error(`${r.status} ${r.statusText}${detail ? ` - ${detail}` : ''}`);
+//  }
+//  return r.json();
+//}
+
 async function fetchJson(url, init) {
   const r = await fetch(url, {
     ...init,
     headers: { 'content-type':'application/json', ...(init?.headers||{}) }
   });
+
+  // 204: kein Body → leeres Objekt
+  if (r.status === 204) return {};
+
+  // Body genau einmal lesen:
+  const text = await r.text();
+  const data = text ? JSON.parse(text) : {};
+
   if (!r.ok) {
-    let detail = '';
-    try { detail = JSON.stringify(await r.json()); } catch {}
-    //throw new Error(`${r.status} ${r.statusText}${detail ? ` - ${detail}` : ''}`);
+    const msg = data?.error || r.statusText || 'request_failed';
+    throw new Error(`${r.status} ${msg}`);
   }
-  return r.json();
+  return data;
 }
+
 
 // GET /api/tenants/:orgId  → returns tenant.json (or 404)
 export async function getTenant(orgId) {
