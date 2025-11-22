@@ -70,3 +70,19 @@ export async function ensureTenant(form) {
     }
   }
 }
+
+export async function saveDraft(orgId, tenantObj, { ref } = {}) {
+  const qs = q({ ref });
+  return fetchJson(`${BASE}/api/tenants/${encodeURIComponent(orgId)}/save${qs}`, {
+    method: 'PUT',
+    body: JSON.stringify(tenantObj)
+  });
+}
+
+// 🔹 NEU: Merge (head → base)
+export async function mergeBranch(orgId, { head, base='main' }) {
+  return fetchJson(`${BASE}/api/tenants/${encodeURIComponent(orgId)}/merge`, {
+    method: 'POST',
+    body: JSON.stringify({ head, base })
+  });
+}

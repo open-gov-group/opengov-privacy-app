@@ -1,6 +1,6 @@
 // src/pages/TenantSetup.jsx
 import React, { useEffect, useMemo, useState } from 'react';
-import { buildOrgId, getTenant, initTenant, updateTenant, ensureTenant } from '@/lib/tenantApi';
+import { buildOrgId, getTenant, initTenant, updateTenant, ensureTenant, mergeBranch, saveDraft } from '@/lib/tenantApi';
 import { setOrgId as setGlobalOrgId, getOrgId } from '@/lib/orgId';
 import { getGlobalFromTenant, applyGlobalToTenant } from '@/lib/tenantShape';
 
@@ -33,44 +33,23 @@ export default function TenantSetup() {
     setBusy(true); setMsg(''); setErr('');
     try {
       const oid = getOrgId();               // globale, gültige OrgID
-      let currentRef = branch || `feature/${oid}-tenant`;
-      let res = await fetch(`${import.meta.env.VITE_GATEWAY_BASE}/api/tenants/${encodeURIComponent(oid)}/save?ref=${encodeURIComponent(currentRef)}`, {
-        method: 'PUT',
-        headers: { 'content-type': 'application/json', 'x-api-key': import.meta.env.VITE_GATEWAY_API_KEY || '' },
-        body: JSON.stringify(tenant)
-      });
-      let j = await res.json();
-
-      // Falls Tenant/Branch noch nicht existiert: einmal initialisieren und erneut speichern
-      if ((res.status === 404 || j?.error === 'not_found')) {
-        // Profil aus aktuellem Tenant lesen oder auf ENV-Default zurückfallen
-        const profileHref =
-          tenant?.['system-security-plan']?.['import-profile']?.href
-          || import.meta.env.VITE_DEFAULT_PROFILE_HREF
-          || undefined;
-
-        const init = await ensureTenant({
-          orgId: oid,
-          title: tenant?.['system-security-plan']?.metadata?.title || oid,
-          defaultProfileHref: profileHref
-        });
-       if (!init?.ok) throw new Error(init?.error || 'init failed');
-          // Branch aus init übernehmen (oder fallback)
-          currentRef = init.branch || currentRef;
-          setBranch(currentRef);
-
-          // zweiter Versuch: speichern
-          res = await fetch(`${import.meta.env.VITE_GATEWAY_BASE}/api/tenants/${encodeURIComponent(oid)}/save?ref=${encodeURIComponent(currentRef)}`, {
-            method: 'PUT',
-            headers: { 'content-type': 'application/json', 'x-api-key': import.meta.env.VITE_GATEWAY_API_KEY || '' },
-            body: JSON.stringify(tenant)
-          });
-          j = await res.json();
+      if (!oid) throw new Error('Keine gültige OrgID gesetzt. Bitte zuerst laden/anjegen.');+     let currentRef = branch || `feature/${oid}-tenant`;
+      let j;
+      try {
+        j = await saveDraft(oid, tenant, { ref: currentRef });
+      } catch (e) {
+        // Falls 404/not_found → automatisch initialisieren und nochmal speichern
+        if (String(e.message||'').includes('404') || String(e.message||'').includes('not_found')) {
+          const out = await ensureTenant({ orgId: oid, title: tenant?.['system-security-plan']?.metadata?.title || oid });
+          if (!out.ok) throw new Error('Init fehlgeschlagen');
+          currentRef = out.branch || currentRef;
+          j = await saveDraft(oid, tenant, { ref: currentRef });
+        } else {
+          throw e;
         }
-
-        if (!res.ok || !j?.ok) throw new Error(j?.error || res.statusText);
-        setBranch(j.branch || currentRef);
-        setMsg(`Entwurf gespeichert @ ${j.branch || currentRef}${j.prUrl ? ` (PR: ${j.prUrl})` : ''}`);
+      }
+      setBranch(j.branch || currentRef);
+      setMsg(`Entwurf gespeichert @ ${j.branch || currentRef}${j.prUrl ? ` (PR: ${j.prUrl})` : ''}`);
     } catch (e) {
       setErr(`Draft speichern fehlgeschlagen: ${e.message}`);
     } finally { setBusy(false); }
@@ -81,13 +60,7 @@ export default function TenantSetup() {
     try {
       const oid = getOrgId();
       const head = branch || `feature/${oid}-tenant`;
-      const res = await fetch(`${import.meta.env.VITE_GATEWAY_BASE}/api/tenants/${encodeURIComponent(oid)}/merge`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json', 'x-api-key': import.meta.env.VITE_GATEWAY_API_KEY || '' },
-        body: JSON.stringify({ head, base: 'main' })
-      });
-      const j = await res.json();
-      if (!res.ok || !j.ok) throw new Error(j.error || res.statusText);
+      const j = await mergeBranch(oid, { head, base: 'main' });
       setMsg(`Gemerged: ${head} → ${j.base} (${j.mergeSha?.slice(0,7) || ''})`);
     } catch (e) {
       setErr(`Merge fehlgeschlagen: ${e.message}`);
