@@ -73,7 +73,7 @@ export async function ensureTenant(form) {
 
 export async function saveDraft(orgId, tenantObj, { ref } = {}) {
   const qs = ref ? `?${new URLSearchParams({ ref }).toString()}` : '';
-  return fetchJson(`${BASE}/api/tenants/${encodeURIComponent(orgId)}/save${qs}`, {
+  return fetchJson(`${BASE}/api/tenants/${encodeURIComponent(orgId)}/save${encodeURIComponent(qs)}`, {
     method: 'PUT',
     body: JSON.stringify(tenantObj)
   });
