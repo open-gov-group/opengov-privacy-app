@@ -21,7 +21,7 @@ export default function TenantSetup() {
   // Loaded/created tenant (editable)
   const [tenant, setTenant] = useState(null);
   const canAct = !!tenant && !!getOrgId();   // <— Guard für Buttons
-  
+
   // UI state
   const [orgIdLocal, setOrgIdLocal] = useState('');
   
@@ -64,7 +64,13 @@ export default function TenantSetup() {
       const oid = getOrgId();
       if (!oid) throw new Error('Keine gültige OrgID gesetzt.');
       const head = (branch && branch.trim()) || `feature/${oid}-tenant`;
-      const j = await mergeBranch(oid, { head, base: 'main' });
+      let currentRef = branch || `feature/${oid}-tenant`;
+      let j;
+      try {
+          j = await mergeBranch(oid, tenant, { ref: currentRef });
+      } catch (e) {
+        setErr(`Merge fehlgeschlagen: ${e.message}`);
+      }
       setMsg(`Gemerged: ${head} → ${j.base}${j.mergeSha ? ` (${j.mergeSha.slice(0,7)})` : ''}`);
     } catch (e) {
       setErr(`Merge fehlgeschlagen: ${e.message}`);

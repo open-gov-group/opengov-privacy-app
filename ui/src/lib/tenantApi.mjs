@@ -100,10 +100,19 @@ export async function saveDraft(orgId, tenantObj, { ref } = {}) {
   });
 }
 
-// Merge (head → base)
-export async function mergeBranch(orgId, { head, base='main' }) {
-  return fetchJson(`${BASE}/api/tenants/${encodeURIComponent(orgId)}/merge`, {
+
+export async function mergeBranch(orgId, tenantObj, { ref } = {}) {
+  const qs = ref ? `?${new URLSearchParams({ ref }).toString()}` : '';
+  return fetchJson(`${BASE}/api/tenants/${encodeURIComponent(orgId)}/merge${qs}`, {
     method: 'POST',
-    body: JSON.stringify({ head, base })
+    body: JSON.stringify(tenantObj)
   });
 }
+
+// Merge (head → base)
+//export async function mergeBranch(orgId, { head, base='main' }) {
+// return fetchJson(`${BASE}/api/tenants/${encodeURIComponent(orgId)}/merge`, {
+//    method: 'POST',
+//    body: JSON.stringify({ head, base })
+//  });
+//}
