@@ -1,6 +1,7 @@
 // src/pages/RopaDirectory.jsx
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import {loadPreview, createBundle, loadDirectory, importAktenplan } from '@/lib/ropaApi';
 
 const GW = import.meta.env.VITE_GATEWAY_BASE || '';
 
@@ -11,38 +12,16 @@ export default function RopaDirectory() {
   const [msg, setMsg] = useState('');
   const [err, setErr] = useState('');
 
-  async function loadPreview() {
-    setMsg(''); setErr('');
-    try {
-      if (!href.trim()) throw new Error('Bitte XDOMEA-URL angeben.');
-      const r = await fetch(`${GW}/api/ropa/preview?org=${encodeURIComponent(orgId)}&href=${encodeURIComponent(href)}`);
-      const j = await r.json();
-      if (!r.ok || !j.ok) throw new Error(j.error || r.statusText);
-      // Vorschlagsliste (ohne Bundles)
-      setItems((j.ropa?.processes || []).map(p => ({ id:p.id, title:p.title })));
-      setMsg(`Vorschau geladen: ${j.ropa?.processes?.length || 0} Prozesse`);
-    } catch (e) {
-      setErr(`Fehler beim Laden: ${e.message}`);
-      setItems([]);
-    }
-  }
 
-  async function createBundle(p) {
-    setMsg(''); setErr('');
-    try {
-      const r = await fetch(`${GW}/api/tenants/${encodeURIComponent(orgId)}/bundles`, {
-        method: 'POST',
-        headers: { 'content-type':'application/json' }, // ggf. x-api-key hinzufügen
-        body: JSON.stringify({ title: p.title, processId: p.id })
-      });
-      const j = await r.json();
-      if (!r.ok || !j.ok) throw new Error(j.error || r.statusText);
-      setItems(prev => prev.map(x => x.id === p.id ? { ...x, bundleId: j.bundleId, sspHref: j.sspHref } : x));
-      setMsg(`Bundle angelegt: ${j.bundleId}${j.prUrl ? ` (PR: ${j.prUrl})` : ''}`);
-    } catch (e) {
-      setErr(`Anlegen fehlgeschlagen: ${e.message}`);
-    }
-  }
+
+  useEffect(() => {
+    // beim ersten Render Directory holen
+    loadDirectory();
+  }, []); // nur einmal beim Mount
+
+    useEffect(() => {
+    loadDirectory(orgId);
+  }, [orgId]);
 
   return (
     <div className="space-y-6">
@@ -63,7 +42,7 @@ export default function RopaDirectory() {
           onChange={e => setHref(e.target.value)}
         />
         <button onClick={loadPreview} className="rounded bg-blue-600 text-white px-4 py-2">
-          Vorschau laden
+          Aktenplan laden
         </button>
       </div>
 
@@ -71,35 +50,45 @@ export default function RopaDirectory() {
       {err && <div className="text-red-700 text-sm">{err}</div>}
 
       <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {items.map(item => (
-          <div key={item.id} className="rounded-lg border bg-white p-4">
-            <div className="text-xs text-gray-500">Process-ID: {item.id}</div>
-            <h2 className="font-semibold">{item.title}</h2>
-            <div className="mt-3 flex gap-3">
-              {!item.bundleId ? (
-                <button onClick={()=>createBundle(item)} className="rounded bg-emerald-600 text-white px-3 py-1.5">
-                  Anlegen (Minimal)
-                </button>
-              ) : (
-                <>
-                  <Link
-                    to={`/ssp?org=${encodeURIComponent(orgId)}&bundle=${encodeURIComponent(item.bundleId)}`}
-                    className="text-blue-700 underline"
-                  >
-                    Öffnen
-                  </Link>
-                  <a
-                    href={item.sspHref || `https://raw.githubusercontent.com/open-gov-group/opengov-privacy-data/HEAD/data/tenants/${orgId}/bundles/${item.bundleId}/ssp.json`}
-                    target="_blank" rel="noreferrer" className="text-gray-700 underline"
-                  >
-                    RAW
-                  </a>
-                </>
-              )}
+        {items.map(item => {
+          const procId = item.id || item.processId;
+          return (
+            <div key={procId} className="rounded-lg border bg-white p-4">
+              <div className="text-xs text-gray-500">
+                Process-ID: {procId}
+              </div>
+              <h2 className="font-semibold">{item.title || procId}</h2>
+              <div className="mt-3 flex gap-3">
+                {item.sspHref ? (
+                  <>
+                    <Link
+                      to={`/ssp?org=${encodeURIComponent(
+                        orgId
+                      )}&proc=${encodeURIComponent(procId)}`}
+                      className="text-blue-700 underline"
+                    >
+                      Öffnen
+                    </Link>
+                    <a
+                      href={item.sspHref}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-gray-700 underline"
+                    >
+                      RAW
+                    </a>
+                  </>
+                ) : (
+                  <span className="text-xs text-gray-500">
+                    Noch kein SSP verfügbar
+                  </span>
+                )}
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
+
 
       <p className="text-xs text-gray-500">
         Tipp: Für einen schnellen Test kannst du die bereitgestellte JSON-Probe nutzen (XDOMEA→JSON). Sie bildet die
