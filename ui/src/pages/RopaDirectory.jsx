@@ -52,12 +52,12 @@ async function createBundle(p) {
   }
 }
 
-
-async function loadDirectory(targetOrgId = orgId) {
+async function loadDirectory(targetOrgId = orgId, ref) {
   setErr('');
   try {
+    const q = ref ? `?ref=${encodeURIComponent(ref)}` : '';
     const r = await fetch(
-      `${GW}/api/tenants/${encodeURIComponent(targetOrgId)}/procedures`
+      `${GW}/api/tenants/${encodeURIComponent(targetOrgId)}/procedures${q}`
     );
     const j = await r.json();
 
@@ -87,8 +87,6 @@ async function loadDirectory(targetOrgId = orgId) {
 }
 
 
-
-  
 async function importAktenplan() {
     setMsg('');
     setErr('');
@@ -123,6 +121,7 @@ async function importAktenplan() {
     } catch (e) {
       setErr(`Fehler beim Import: ${e.message}`);
     }
+    await loadDirectory(orgId, ref);
   }
 
   async function commitAktenplan() {
@@ -156,6 +155,7 @@ async function importAktenplan() {
     } catch (e) {
       setErr(`Fehler beim Übernehmen: ${e.message}`);
     }
+    await loadDirectory(orgId);
   }
 
 
