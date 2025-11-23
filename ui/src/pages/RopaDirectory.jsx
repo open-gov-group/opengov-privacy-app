@@ -1,7 +1,7 @@
 // src/pages/RopaDirectory.jsx
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import {loadPreview, createBundle, loadDirectory, importAktenplan } from '@/lib/ropaApi';
+import {loadPreview, createBundle } from '@/lib/ropaApi';
 
 const GW = import.meta.env.VITE_GATEWAY_BASE || '';
 
@@ -13,6 +13,65 @@ export default function RopaDirectory() {
   const [err, setErr] = useState('');
 
 
+async function loadDirectory(targetOrgId = orgId) {
+    setErr('');
+    try {
+      const r = await fetch(
+        `${GW}/api/tenants/${encodeURIComponent(targetOrgId)}/ropa`
+      );
+      const j = await r.json();
+      if (!r.ok || !j.ok) {
+        throw new Error(j.error || r.statusText);
+      }
+      const list = j.items || j.ropa || [];
+      setItems(list);
+      setMsg(
+        `Verzeichnis geladen: ${list.length} Einträge für ${targetOrgId}`
+      );
+    } catch (e) {
+      setItems([]);
+      setErr(`Fehler beim Laden des Verzeichnisses: ${e.message}`);
+    }
+  }
+
+  
+ async function importAktenplan() {
+    setMsg('');
+    setErr('');
+    try {
+      if (!href.trim()) {
+        throw new Error('Bitte XDOMEA-URL angeben.');
+      }
+
+      // gleichen Branch nutzen wie für tenant.json
+      const ref = `feature/${orgId}`;
+
+      setMsg('Aktenplan wird importiert …');
+      const r = await fetch(
+        `${GW}/api/tenants/${encodeURIComponent(
+          orgId
+        )}/ropa/import?ref=${encodeURIComponent(ref)}`,
+        {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ url: href })
+        }
+      );
+      const j = await r.json();
+      if (!r.ok || !j.ok) {
+        throw new Error(j.detail || j.error || r.statusText);
+      }
+
+      const count = j.created?.length || 0;
+      setMsg(`Aktenplan importiert: ${count} Prozesse`);
+
+      // direkt danach das Verzeichnis aktualisieren
+      await loadDirectory(orgId);
+    } catch (e) {
+      setErr(`Fehler beim Import: ${e.message}`);
+      // items lassen wir stehen – könnte ja ein alter Stand sein
+    }
+  }
 
   useEffect(() => {
     // beim ersten Render Directory holen
