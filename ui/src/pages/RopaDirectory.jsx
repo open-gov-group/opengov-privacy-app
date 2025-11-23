@@ -54,25 +54,34 @@ async function createBundle(p) {
 
 
 async function loadDirectory(targetOrgId = orgId) {
-    setErr('');
-    try {
-      const r = await fetch(
-        `${GW}/api/tenants/${encodeURIComponent(targetOrgId)}/ropa`
-      );
-      const j = await r.json();
-      if (!r.ok || !j.ok) {
-        throw new Error(j.error || r.statusText);
-      }
-      const list = j.items || j.ropa || [];
-      setItems(list);
-      setMsg(
-        `Verzeichnis geladen: ${list.length} Einträge für ${targetOrgId}`
-      );
-    } catch (e) {
-      setItems([]);
-      setErr(`Fehler beim Laden des Verzeichnisses: ${e.message}`);
+  setErr('');
+  try {
+    const r = await fetch(
+      `${GW}/api/tenants/${encodeURIComponent(targetOrgId)}/ropa`
+    );
+    const j = await r.json();
+
+    // WICHTIG: hier nur r.ok prüfen, NICHT j.ok
+    if (!r.ok) {
+      throw new Error(j.detail || j.error || r.statusText);
     }
+
+    // Gateway liefert { items: [ "proc-1", "proc-2", ... ] }
+    const rawItems = Array.isArray(j.items) ? j.items : [];
+
+    // In Karten brauchen wir {id, title}
+    const list = rawItems.map(x =>
+      typeof x === 'string' ? { id: x, title: x } : x
+    );
+
+    setItems(list);
+    setMsg(`Verzeichnis geladen: ${list.length} Einträge für ${targetOrgId}`);
+  } catch (e) {
+    setItems([]);
+    setErr(`Fehler beim Laden des Verzeichnisses: ${e.message}`);
   }
+}
+
 
   
 async function importAktenplan() {
@@ -245,7 +254,7 @@ async function importAktenplan() {
                 </>
               )}
             </div>
-            
+
           </div>
             );
           })}
