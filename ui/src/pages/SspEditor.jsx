@@ -20,6 +20,13 @@ const dig = (o, p, d=undefined) => p.split(".").reduce((a,k)=> (a&&k in a?a[k]:u
 const API_BASE = import.meta.env.VITE_API_BASE;
 
 
+const params = new URLSearchParams(location.search);
+const orgId = params.get('org');
+const sspId = params.get('bundle'); // = bundleId
+
+const res = await fetch(`${GW}/api/tenants/${encodeURIComponent(orgId)}/procedures/${encodeURIComponent(sspId)}`);
+const doc = await res.json();
+
 export default function SspEditor() {
  
   const PROFILES = [

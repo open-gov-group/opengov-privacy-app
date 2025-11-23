@@ -30,21 +30,27 @@ async function loadPreview() {
   }
 
 async function createBundle(p) {
-    setMsg(''); setErr('');
-    try {
-      const r = await fetch(`${GW}/api/tenants/${encodeURIComponent(orgId)}/bundles`, {
-        method: 'POST',
-        headers: { 'content-type':'application/json' }, // ggf. x-api-key hinzufügen
-        body: JSON.stringify({ title: p.title, processId: p.id })
-      });
-      const j = await r.json();
-      if (!r.ok || !j.ok) throw new Error(j.error || r.statusText);
-      setItems(prev => prev.map(x => x.id === p.id ? { ...x, bundleId: j.bundleId, sspHref: j.sspHref } : x));
-      setMsg(`Bundle angelegt: ${j.bundleId}${j.prUrl ? ` (PR: ${j.prUrl})` : ''}`);
-    } catch (e) {
-      setErr(`Anlegen fehlgeschlagen: ${e.message}`);
-    }
+  setMsg(''); setErr('');
+  try {
+    const r = await fetch(`${GW}/api/tenants/${encodeURIComponent(orgId)}/bundles`, {
+      method: 'POST',
+      headers: { 'content-type':'application/json' }, // ggf. x-api-key hinzufügen
+      body: JSON.stringify({ title: p.title, processId: p.id })
+    });
+    const j = await r.json();
+    if (!r.ok || !j.ok) throw new Error(j.error || r.statusText);
+
+    setItems(prev =>
+      prev.map(x => x.id === p.id
+        ? { ...x, bundleId: j.bundleId, sspHref: j.sspHref }
+        : x
+      )
+    );
+    setMsg(`Bundle angelegt: ${j.bundleId}${j.prUrl ? ` (PR: ${j.prUrl})` : ''}`);
+  } catch (e) {
+    setErr(`Anlegen fehlgeschlagen: ${e.message}`);
   }
+}
 
 
 async function loadDirectory(targetOrgId = orgId) {
@@ -201,19 +207,35 @@ async function importAktenplan() {
             <div className="text-xs text-gray-500">Process-ID: {procId}</div>
             <h2 className="font-semibold">{title}</h2>
 
-            <div className="mt-3 flex flex-wrap gap-2 items-center">
-              {item.sspHref ? (
+            <div className="mt-3 flex flex-wrap gap-3 items-center">
+              {!item.bundleId ? (
+                <>
+                  <span className="text-xs text-gray-500">
+                    Noch kein SSP
+                  </span>
+                  <button
+                    onClick={() => createBundle(item)}
+                    className="rounded bg-emerald-600 text-white px-3 py-1.5 text-xs"
+                  >
+                    Anlegen
+                  </button>
+                  <button
+                    onClick={() => createFromTemplate(item)} // TODO: später implementieren
+                    className="rounded border px-3 py-1.5 text-xs"
+                  >
+                    Aus Vorlage
+                  </button>
+                </>
+              ) : (
                 <>
                   <Link
-                    to={`/ssp?org=${encodeURIComponent(
-                      orgId
-                    )}&proc=${encodeURIComponent(procId)}`}
+                    to={`/ssp?org=${encodeURIComponent(orgId)}&bundle=${encodeURIComponent(item.bundleId)}`}
                     className="text-blue-700 underline text-sm"
                   >
                     Öffnen
                   </Link>
                   <a
-                    href={item.sspHref}
+                    href={item.sspHref || `${GW}/api/tenants/${encodeURIComponent(orgId)}/procedures/${encodeURIComponent(item.bundleId)}`}
                     target="_blank"
                     rel="noreferrer"
                     className="text-gray-700 underline text-sm"
@@ -221,25 +243,9 @@ async function importAktenplan() {
                     RAW
                   </a>
                 </>
-              ) : (
-                <span className="text-xs text-gray-500 flex-1">
-                  Noch kein SSP verfügbar
-                </span>
               )}
-
-              <button
-                onClick={handleCreateNew}
-                className="border rounded px-2 py-1 text-xs"
-              >
-                Anlegen
-              </button>
-              <button
-                onClick={handleCreateFromTemplate}
-                className="border rounded px-2 py-1 text-xs"
-              >
-                Aus Vorlage
-              </button>
             </div>
+            
           </div>
             );
           })}
