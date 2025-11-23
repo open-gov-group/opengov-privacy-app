@@ -106,14 +106,6 @@ async function loadDirectory(targetOrgId = orgId) {
     }
   }
 
-  useEffect(() => {
-    // beim ersten Render Directory holen
-    loadDirectory();
-  }, []); // nur einmal beim Mount
-
-    useEffect(() => {
-    loadDirectory(orgId);
-  }, [orgId]);
 
   return (
     <div className="space-y-6">
