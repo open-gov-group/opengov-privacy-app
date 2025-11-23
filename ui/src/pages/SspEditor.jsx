@@ -291,11 +291,70 @@ export default function SspEditor() {
   useEffect(()=>{ load(); /* eslint-disable-next-line */ },[]);
 
   const sspMeta = dig(ssp, "system-security-plan.metadata", {});
-  const implReqs = dig(ssp, "system-security-plan.control-implementation.implemented-requirements", []) || [];
-  const components = dig(ssp, "system-security-plan.system-implementation.components", []) || [];
-  const bm = dig(ssp, "system-security-plan.back-matter.resources", []) || [];
 
-  const statements = useMemo(()=>implReqs.flatMap(ir => (ir.statements||[]).map(s => ({...s, controlId: ir["control-id"]}))), [implReqs]);
+  // Implemented requirements normalisieren:
+  //  - unterstützt "implemented-requirements" (Array)
+  //  - und "implemented-requirement" (OSCAL, evtl. Array)
+  const rawImplReqs =
+    dig(ssp, "system-security-plan.control-implementation.implemented-requirements", null) ??
+    dig(ssp, "system-security-plan.control-implementation.implemented-requirement", []) ??
+    [];
+
+  const implReqs = (Array.isArray(rawImplReqs) ? rawImplReqs : [rawImplReqs])
+    .filter(Boolean)
+    .map(ir => {
+      // statements können sein:
+      // - Array (target)
+      // - { statement: {...} } oder { statement: [...] }
+      let stmts = ir.statements;
+      if (stmts && !Array.isArray(stmts)) {
+        if (Array.isArray(stmts.statement)) stmts = stmts.statement;
+        else if (stmts.statement) stmts = [stmts.statement];
+      }
+      stmts = (stmts || []).map(s => {
+        // by-components vs. by-component
+        let byComps = s["by-components"];
+        if (!Array.isArray(byComps)) {
+          const bc = s["by-component"];
+          if (Array.isArray(bc)) byComps = bc;
+          else if (bc) byComps = [bc];
+          else byComps = [];
+        }
+        return { ...s, "by-components": byComps };
+      });
+      return { ...ir, statements: stmts };
+    });
+
+  // Components normalisieren:
+  //  - unterstützt Array
+  //  - oder { component: [...] } (OSCAL)
+  const rawComponents = dig(ssp, "system-security-plan.system-implementation.components", []) || [];
+  const components = Array.isArray(rawComponents)
+    ? rawComponents
+    : Array.isArray(rawComponents.component)
+    ? rawComponents.component
+    : [];
+
+  // Back-matter resources normalisieren:
+  //  - unterstützt Array
+  //  - oder { resource: [...] } (OSCAL)
+  const rawResources = dig(ssp, "system-security-plan.back-matter.resources", []) || [];
+  const bm = Array.isArray(rawResources)
+    ? rawResources
+    : Array.isArray(rawResources.resource)
+    ? rawResources.resource
+    : [];
+
+  const statements = useMemo(
+    () =>
+      implReqs.flatMap(ir =>
+        (ir.statements || []).map(s => ({
+          ...s,
+          controlId: ir["control-id"],
+        }))
+      ),
+    [implReqs]
+  );
 
   const addEvidenceToBackMatter  = () => {
     if (!ssp || !evHref) return;
