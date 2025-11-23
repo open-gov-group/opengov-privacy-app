@@ -909,10 +909,17 @@ function IfgView({ ssp, implReqs }) {
   };
 
   // TOMs: implemented-requirements, die ein tom-Prop haben
-  const tomReqs = (implReqs || []).filter((ir) => {
-    const propsArr = (ir.props && ir.props.prop) || [];
-    return propsArr.some((p) => p.name === "tom");
-  });
+// TOMs: implemented-requirements, die ein tom-Prop haben
+const tomReqs = (implReqs || []).filter((ir) => {
+  const rawProp = ir.props && ir.props.prop;
+  const propsArr = Array.isArray(rawProp)
+    ? rawProp
+    : rawProp
+    ? [rawProp]
+    : [];
+  return propsArr.some((p) => p && p.name === "tom");
+});
+
 
   return (
     <div className="space-y-4">
@@ -985,25 +992,33 @@ function IfgView({ ssp, implReqs }) {
 
           // TOMs je Prozess: implemented-requirements mit tom-Prop und Statement,
           // das auf diese Prozess-UUID zeigt
-          const tomsForProc = tomReqs.map((ir) => {
-            const propsArr = (ir.props && ir.props.prop) || [];
-            const tomProp = propsArr.find((p) => p.name === "tom");
-            const tomName = tomProp ? tomProp.value : ir["control-id"];
+          const tomsForProc = tomReqs
+            .map((ir) => {
+              const rawProp = ir.props && ir.props.prop;
+              const propsArr = Array.isArray(rawProp)
+                ? rawProp
+                : rawProp
+                ? [rawProp]
+                : [];
+              const tomProp = propsArr.find((p) => p && p.name === "tom");
+              const tomName = tomProp ? tomProp.value : ir["control-id"];
 
-            let desc = "";
-            for (const s of ir.statements || []) {
-              const byComps = s["by-components"] || [];
-              const list = Array.isArray(byComps) ? byComps : [byComps];
-              const hit = list.find(
-                (bc) => bc && bc["component-uuid"] === procId
-              );
-              if (hit && hit.description) {
-                desc = hit.description;
-                break;
+              let desc = "";
+              for (const s of ir.statements || []) {
+                const byComps = s["by-components"] || [];
+                const list = Array.isArray(byComps) ? byComps : [byComps];
+                const hit = list.find(
+                  (bc) => bc && bc["component-uuid"] === procId
+                );
+                if (hit && hit.description) {
+                  desc = hit.description;
+                  break;
+                }
               }
-            }
-            return { tomName, desc };
-          }).filter((t) => t.tomName);
+              return { tomName, desc };
+            })
+            .filter((t) => t.tomName);
+
 
           return (
             <div
