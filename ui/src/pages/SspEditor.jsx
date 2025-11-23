@@ -607,6 +607,7 @@ export default function SspEditor() {
         <Tabs defaultValue="ssp">
           <TabsList className="mb-3">
             <TabsTrigger value="ssp">SSP</TabsTrigger>
+            <TabsTrigger value="ifg">IFG-Ansicht</TabsTrigger>
             <TabsTrigger value="poam">POA&M</TabsTrigger>
             <TabsTrigger value="evidence">Evidence Uploader</TabsTrigger>
           </TabsList>
@@ -696,7 +697,13 @@ export default function SspEditor() {
               </CardContent>
             </Card>
           </TabsContent>
-
+          <TabsContent value="ifg">
+            <Card className="shadow-sm">
+              <CardContent className="p-5 space-y-4">
+                <IfgView ssp={ssp} implReqs={implReqs} />
+              </CardContent>
+            </Card>
+          </TabsContent>
           <TabsContent value="poam">
             {poam && (
               <div className="mb-3">
@@ -859,3 +866,478 @@ function InfoTile({ title, value, subtitle }) {
     </Card>
   );
 }
+
+function IfgView({ ssp, implReqs }) {
+  if (!ssp) {
+    return <div className="text-slate-500 text-sm">Kein SSP geladen.</div>;
+  }
+
+  const root = ssp["system-security-plan"] || {};
+  const meta = root.metadata || {};
+  const title = meta.title || "Verzeichnis der Verarbeitungstätigkeiten";
+  const lastModified = meta["last-modified"] || "";
+  const parties = meta.parties || {};
+  const partyList = Array.isArray(parties.party)
+    ? parties.party
+    : parties.party
+    ? [parties.party]
+    : [];
+  const orgParty =
+    partyList.find((p) => p.type === "organization") || partyList[0] || {};
+  const orgName = orgParty.name || "";
+  const orgMail = orgParty["email-address"] || "";
+
+  // Komponenten normalisieren (Array oder { component: [...] })
+  let comps =
+    dig(ssp, "system-security-plan.system-implementation.components", []) || [];
+  if (!Array.isArray(comps) && comps.component) comps = comps.component;
+
+  const processes = comps.filter((c) => c.type === "process");
+  const software = comps.filter((c) => c.type === "software");
+  const services = comps.filter((c) => c.type === "service");
+  const compByUuid = new Map(comps.map((c) => [c.uuid, c]));
+
+  // Hilfsfunktion: Props nach name → [values] mapen
+  const getPropsMap = (c) => {
+    const out = {};
+    const arr = (c && c.props && c.props.prop) || [];
+    for (const p of arr) {
+      if (!out[p.name]) out[p.name] = [];
+      out[p.name].push(p.value);
+    }
+    return out;
+  };
+
+  // TOMs: implemented-requirements, die ein tom-Prop haben
+  const tomReqs = (implReqs || []).filter((ir) => {
+    const propsArr = (ir.props && ir.props.prop) || [];
+    return propsArr.some((p) => p.name === "tom");
+  });
+
+  return (
+    <div className="space-y-4">
+      <header>
+        <h2 className="text-xl font-semibold">
+          Verzeichnis der Verarbeitungstätigkeiten (IFG-Ansicht)
+        </h2>
+        <p className="text-sm text-slate-500">
+          RoPA (SDM) – IFG-konforme Veröffentlichung auf Basis des geladenen
+          SSP.
+        </p>
+        <div className="mt-2 text-sm text-slate-600 space-y-1">
+          {orgName && (
+            <div>
+              <strong>Behörde:</strong> {orgName}
+            </div>
+          )}
+          {orgMail && (
+            <div>
+              <strong>Datenschutzbeauftragter (Kontakt):</strong> {orgMail}
+            </div>
+          )}
+          {lastModified && (
+            <div>
+              <strong>Stand:</strong> {lastModified}
+            </div>
+          )}
+        </div>
+      </header>
+
+      <div className="grid gap-4 md:grid-cols-2">
+        {processes.map((proc) => {
+          const propsMap = getPropsMap(proc);
+          const procTitle = proc.title || "";
+          const procId = proc.uuid || "";
+          const procedureTitle =
+            (propsMap["procedure-title"] && propsMap["procedure-title"][0]) ||
+            (propsMap["purpose"] && propsMap["purpose"][0]) ||
+            procTitle;
+
+          const purposes = propsMap["purpose"] || [];
+
+          // Rechtsgrundlagen (v1 und v2 zusammen: alles, was mit "legal-basis" beginnt)
+          const legalBases = Object.entries(propsMap)
+            .filter(([name]) => name.startsWith("legal-basis"))
+            .flatMap(([name, values]) =>
+              values.map((v) => ({ name, value: v }))
+            );
+
+          const dataSubjects = propsMap["data-subject"] || [];
+          const dataCategories = propsMap["data-category"] || [];
+
+          const retentionLogical =
+            (propsMap["retention.logical"] &&
+              propsMap["retention.logical"][0]) ||
+            "";
+          const retentionArchival =
+            (propsMap["retention.archival"] &&
+              propsMap["retention.archival"][0]) ||
+            "";
+          const retentionTrigger =
+            (propsMap["retention.trigger"] &&
+              propsMap["retention.trigger"][0]) ||
+            "";
+
+          const recipientsUuids = propsMap["recipient"] || [];
+          const recipients = recipientsUuids
+            .map((id) => compByUuid.get(id))
+            .filter(Boolean);
+
+          // TOMs je Prozess: implemented-requirements mit tom-Prop und Statement,
+          // das auf diese Prozess-UUID zeigt
+          const tomsForProc = tomReqs.map((ir) => {
+            const propsArr = (ir.props && ir.props.prop) || [];
+            const tomProp = propsArr.find((p) => p.name === "tom");
+            const tomName = tomProp ? tomProp.value : ir["control-id"];
+
+            let desc = "";
+            for (const s of ir.statements || []) {
+              const byComps = s["by-components"] || [];
+              const list = Array.isArray(byComps) ? byComps : [byComps];
+              const hit = list.find(
+                (bc) => bc && bc["component-uuid"] === procId
+              );
+              if (hit && hit.description) {
+                desc = hit.description;
+                break;
+              }
+            }
+            return { tomName, desc };
+          }).filter((t) => t.tomName);
+
+          return (
+            <div
+              key={procId || procTitle}
+              className="border rounded-2xl bg-white p-4 shadow-sm"
+            >
+              <h3 className="text-lg font-semibold mb-1">{procTitle}</h3>
+              <div className="text-xs text-slate-500 mb-2">
+                ID:{" "}
+                <span className="font-mono">
+                  {procId || <span className="text-slate-400">—</span>}
+                </span>
+              </div>
+              {proc.description && (
+                <p className="text-sm text-slate-700 mb-3">
+                  {proc.description}
+                </p>
+              )}
+
+              {/* Fachverfahren / RoPA-Kern */}
+              <h4 className="font-semibold text-sm mt-2 mb-1">
+                Fachverfahren (SDM Ebene 1)
+              </h4>
+              <table className="w-full border-collapse text-sm">
+                <tbody>
+                  <tr className="border-t">
+                    <th className="w-40 text-left align-top py-1 pr-2 text-slate-600">
+                      Verfahrenstitel
+                    </th>
+                    <td className="py-1">
+                      {procedureTitle || (
+                        <span className="text-slate-400">—</span>
+                      )}
+                    </td>
+                  </tr>
+                  <tr className="border-t">
+                    <th className="w-40 text-left align-top py-1 pr-2 text-slate-600">
+                      Zwecke
+                    </th>
+                    <td className="py-1">
+                      {purposes.length === 0 ? (
+                        <span className="text-slate-400">—</span>
+                      ) : (
+                        purposes.join("; ")
+                      )}
+                    </td>
+                  </tr>
+                  <tr className="border-t">
+                    <th className="w-40 text-left align-top py-1 pr-2 text-slate-600">
+                      Rechtsgrundlagen
+                    </th>
+                    <td className="py-1">
+                      {legalBases.length === 0 ? (
+                        <span className="text-slate-400">—</span>
+                      ) : (
+                        <ul className="list-disc ml-4">
+                          {legalBases.map((lb, idx) => (
+                            <li key={idx}>
+                              {lb.value}
+                              {lb.name !== "legal-basis" && (
+                                <span className="text-xs text-slate-500 ml-1">
+                                  ({lb.name})
+                                </span>
+                              )}
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </td>
+                  </tr>
+                  <tr className="border-t">
+                    <th className="w-40 text-left align-top py-1 pr-2 text-slate-600">
+                      Betroffene Personen
+                    </th>
+                    <td className="py-1">
+                      {dataSubjects.length === 0 ? (
+                        <span className="text-slate-400">—</span>
+                      ) : (
+                        <div className="flex flex-wrap gap-1">
+                          {dataSubjects.map((ds, idx) => (
+                            <span
+                              key={idx}
+                              className="inline-block text-xs border rounded-full px-2 py-0.5"
+                            >
+                              {ds}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                  <tr className="border-t">
+                    <th className="w-40 text-left align-top py-1 pr-2 text-slate-600">
+                      Datenkategorien
+                    </th>
+                    <td className="py-1">
+                      {dataCategories.length === 0 ? (
+                        <span className="text-slate-400">—</span>
+                      ) : (
+                        <ul className="list-disc ml-4">
+                          {dataCategories.map((dc, idx) => (
+                            <li key={idx}>{dc}</li>
+                          ))}
+                        </ul>
+                      )}
+                    </td>
+                  </tr>
+                  <tr className="border-t">
+                    <th className="w-40 text-left align-top py-1 pr-2 text-slate-600">
+                      Speicher-/Löschregeln
+                    </th>
+                    <td className="py-1 space-y-0.5">
+                      <div>
+                        <strong>Löschfrist:</strong>{" "}
+                        {retentionLogical || (
+                          <span className="text-slate-400">—</span>
+                        )}
+                      </div>
+                      <div>
+                        <strong>Aufbewahrung:</strong>{" "}
+                        {retentionArchival || (
+                          <span className="text-slate-400">—</span>
+                        )}
+                      </div>
+                      <div>
+                        <strong>Trigger:</strong>{" "}
+                        {retentionTrigger || (
+                          <span className="text-slate-400">—</span>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+
+              {/* Empfänger pro Prozess (v2 semantics) */}
+              <h4 className="font-semibold text-sm mt-3 mb-1">
+                Empfänger (pro Prozess)
+              </h4>
+              {recipients.length === 0 ? (
+                <div className="text-xs text-slate-400">—</div>
+              ) : (
+                <ul className="text-sm list-disc ml-4">
+                  {recipients.map((rcp) => {
+                    const rProps = getPropsMap(rcp);
+                    const role =
+                      (rProps["processing-role"] &&
+                        rProps["processing-role"][0]) ||
+                      (rProps["role"] && rProps["role"][0]) ||
+                      "";
+                    return (
+                      <li key={rcp.uuid}>
+                        {rcp.title}{" "}
+                        <span className="text-xs text-slate-500">
+                          –{" "}
+                          <span className="font-mono">
+                            {rcp.uuid || "—"}
+                          </span>
+                          {role && <> ({role})</>}
+                        </span>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+
+              {/* Anwendungen (SDM Ebene 2) – global, wie in XSL */}
+              <h4 className="font-semibold text-sm mt-3 mb-1">
+                Umsetzung (SDM Ebene 2 – Anwendungen)
+              </h4>
+              <div className="overflow-x-auto">
+                <table className="w-full border-collapse text-xs">
+                  <thead>
+                    <tr className="border-t border-b bg-slate-50">
+                      <th className="text-left py-1 px-1">App-ID</th>
+                      <th className="text-left py-1 px-1">Name</th>
+                      <th className="text-left py-1 px-1">Rolle</th>
+                      <th className="text-left py-1 px-1">
+                        Verantwortlichkeit
+                      </th>
+                      <th className="text-left py-1 px-1">AV-Vertrag</th>
+                      <th className="text-left py-1 px-1">Operationen</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {software.length === 0 ? (
+                      <tr>
+                        <td
+                          colSpan={6}
+                          className="text-center text-slate-400 py-2"
+                        >
+                          —
+                        </td>
+                      </tr>
+                    ) : (
+                      software.map((app) => {
+                        const ap = getPropsMap(app);
+                        const role =
+                          (ap["role"] && ap["role"][0]) ||
+                          (ap["processing-role"] &&
+                            ap["processing-role"][0]) ||
+                          "";
+                        const resp =
+                          (ap["responsibility"] &&
+                            ap["responsibility"][0]) ||
+                          "";
+                        const av =
+                          (ap["av-contract-id"] &&
+                            ap["av-contract-id"][0]) ||
+                          (ap["avVertragId"] && ap["avVertragId"][0]) ||
+                          "";
+                        const ops = ap["operation"] || [];
+                        return (
+                          <tr key={app.uuid} className="border-t">
+                            <td className="py-1 px-1 font-mono">
+                              {app.uuid}
+                            </td>
+                            <td className="py-1 px-1">{app.title}</td>
+                            <td className="py-1 px-1">
+                              {role || (
+                                <span className="text-slate-400">—</span>
+                              )}
+                            </td>
+                            <td className="py-1 px-1">
+                              {resp || (
+                                <span className="text-slate-400">—</span>
+                              )}
+                            </td>
+                            <td className="py-1 px-1">
+                              {av || (
+                                <span className="text-slate-400">—</span>
+                              )}
+                            </td>
+                            <td className="py-1 px-1">
+                              {ops.length === 0 ? (
+                                <span className="text-slate-400">—</span>
+                              ) : (
+                                <div className="flex flex-wrap gap-1">
+                                  {ops.map((op, idx) => (
+                                    <span
+                                      key={idx}
+                                      className="inline-block border rounded-full px-2 py-0.5"
+                                    >
+                                      {op}
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Infrastruktur (SDM Ebene 3) */}
+              <h4 className="font-semibold text-sm mt-3 mb-1">
+                Infrastruktur (SDM Ebene 3)
+              </h4>
+              <div className="overflow-x-auto">
+                <table className="w-full border-collapse text-xs">
+                  <thead>
+                    <tr className="border-t border-b bg-slate-50">
+                      <th className="text-left py-1 px-1">Komponenten-ID</th>
+                      <th className="text-left py-1 px-1">Typ</th>
+                      <th className="text-left py-1 px-1">Anbieter</th>
+                      <th className="text-left py-1 px-1">Standort</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {services.length === 0 ? (
+                      <tr>
+                        <td
+                          colSpan={4}
+                          className="text-center text-slate-400 py-2"
+                        >
+                          —
+                        </td>
+                      </tr>
+                    ) : (
+                      services.map((svc) => {
+                        const sp = getPropsMap(svc);
+                        const ctype =
+                          (sp["type"] && sp["type"][0]) || "service";
+                        const loc =
+                          (sp["location"] && sp["location"][0]) || "";
+                        return (
+                          <tr key={svc.uuid} className="border-t">
+                            <td className="py-1 px-1 font-mono">
+                              {svc.uuid}
+                            </td>
+                            <td className="py-1 px-1">{ctype}</td>
+                            <td className="py-1 px-1">{svc.title}</td>
+                            <td className="py-1 px-1">
+                              {loc || (
+                                <span className="text-slate-400">—</span>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* TOMs */}
+              <h4 className="font-semibold text-sm mt-3 mb-1">
+                Technische und organisatorische Maßnahmen (TOMs)
+              </h4>
+              {tomsForProc.length === 0 ? (
+                <div className="text-xs text-slate-400">—</div>
+              ) : (
+                <ul className="text-sm list-disc ml-4">
+                  {tomsForProc.map((t, idx) => (
+                    <li key={idx}>
+                      <strong>{t.tomName}</strong>
+                      {": "}
+                      {t.desc || (
+                        <span className="text-slate-400">
+                          siehe Detailbeschreibung
+                        </span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
