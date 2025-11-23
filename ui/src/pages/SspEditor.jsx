@@ -20,15 +20,9 @@ const dig = (o, p, d=undefined) => p.split(".").reduce((a,k)=> (a&&k in a?a[k]:u
 const API_BASE = import.meta.env.VITE_API_BASE;
 
 
-const params = new URLSearchParams(location.search);
-const orgId = params.get('org');
-const sspId = params.get('bundle'); // = bundleId
-
-const res = await fetch(`${GW}/api/tenants/${encodeURIComponent(orgId)}/procedures/${encodeURIComponent(sspId)}`);
-const doc = await res.json();
 
 export default function SspEditor() {
- 
+
   const PROFILES = [
     {
       id: 'intervenability',
@@ -91,6 +85,36 @@ export default function SspEditor() {
   const [eviReg, setEviReg] = useState([]);
 
   const [contract, setContract] = useState(null);
+
+  useEffect(() => {
+    const qp = new URLSearchParams(window.location.search);
+
+    // 1) org + bundle aus Query lesen
+    const org = qp.get('org');
+    const bundle = qp.get('bundle');
+
+    if (org && bundle) {
+      // Gateway-Basis: entweder VITE_GATEWAY_BASE oder API_BASE
+      const gw = import.meta.env.VITE_GATEWAY_BASE || API_BASE;
+      const url = `${gw}/api/tenants/${encodeURIComponent(
+        org
+      )}/procedures/${encodeURIComponent(bundle)}`;
+      setSspUrl(url);
+    }
+
+    // 2) Bestehende Query-Parameter weiter beachten (ssp, poam, portfolio, id)
+    const s = qp.get('ssp');
+    const p = qp.get('poam');
+    const pf = qp.get('portfolio');
+    const pid = qp.get('id');
+
+    // Wenn explizit ?ssp=... gesetzt ist, darf das sspUrl überschreiben
+    if (s) setSspUrl(s);
+    if (p) setPoamUrl(p);
+    if (pf) setPortfolioUrl(pf);
+    if (pid) setPortfolioId(pid);
+  }, []);
+
 
 
   useEffect(() => {
