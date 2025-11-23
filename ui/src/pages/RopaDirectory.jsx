@@ -4,96 +4,131 @@ import { Link } from 'react-router-dom';
 
 const GW = import.meta.env.VITE_GATEWAY_BASE || '';
 
-
 export default function RopaDirectory() {
   const [orgId, setOrgId] = useState('EU-DE-NRW-40213-DUESSELDORF'); // später aus Tenant-Kontext
-  const [href, setHref] = useState(''); // XDOMEA XML/JSON Quelle
-  const [items, setItems] = useState([]); // {id,title, bundleId?, sspHref?}
+  const [href, setHref] = useState('');           // XDOMEA XML/JSON Quelle
+  const [mainItems, setMainItems] = useState([]); // RoPA aus main
+  const [draftItems, setDraftItems] = useState([]); // Import-/Preview-Ergebnis (Draft)
+  const [lastImportRef, setLastImportRef] = useState(''); // Branch des letzten Imports
   const [msg, setMsg] = useState('');
   const [err, setErr] = useState('');
-  const [lastImportRef, setLastImportRef] = useState(''); // Branch des letzten Imports
 
-async function loadPreview() {
-    setMsg(''); setErr('');
+  // Beim Laden der Seite: wenn orgId gesetzt → RoPA (main) laden
+  useEffect(() => {
+    if (!orgId) {
+      setMainItems([]);
+      return;
+    }
+    loadMainRopa(orgId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orgId]);
+
+  // RoPA-Verzeichnis aus main laden
+  async function loadMainRopa(targetOrgId) {
+    setErr('');
+    try {
+      const r = await fetch(
+        `${GW}/api/tenants/${encodeURIComponent(targetOrgId)}/ropa`
+      );
+      const j = await r.json();
+      if (!r.ok) {
+        throw new Error(j.detail || j.error || r.statusText);
+      }
+
+      const raw = Array.isArray(j.items) ? j.items : [];
+      const list = raw.map(p =>
+        typeof p === 'string' ? { id: p, title: p } : p
+      );
+
+      setMainItems(list);
+      setMsg(`Verzeichnis geladen: ${list.length} Einträge (Main)`);
+    } catch (e) {
+      setMainItems([]);
+      setErr(`Fehler beim Laden des Verzeichnisses (Main): ${e.message}`);
+    }
+  }
+
+  // Vorschau aus XDOMEA – schreibt nur Draft-Liste (ohne SSP)
+  async function loadPreview() {
+    setMsg('');
+    setErr('');
+    setDraftItems([]);
     try {
       if (!href.trim()) throw new Error('Bitte XDOMEA-URL angeben.');
-      const r = await fetch(`${GW}/api/ropa/preview?org=${encodeURIComponent(orgId)}&href=${encodeURIComponent(href)}`);
+      const r = await fetch(
+        `${GW}/api/ropa/preview?org=${encodeURIComponent(
+          orgId
+        )}&href=${encodeURIComponent(href)}`
+      );
       const j = await r.json();
       if (!r.ok || !j.ok) throw new Error(j.error || r.statusText);
-      // Vorschlagsliste (ohne Bundles)
-      setItems((j.ropa?.processes || []).map(p => ({ id:p.id, title:p.title })));
-      setMsg(`Vorschau geladen: ${j.ropa?.processes?.length || 0} Prozesse`);
+
+      const list = (j.ropa?.processes || []).map(p => ({
+        id: p.id,
+        title: p.title || p.id,
+        sspHref: null
+      }));
+
+      setDraftItems(list);
+      setMsg(
+        `Vorschau geladen: ${j.ropa?.processes?.length || 0} Prozesse (Draft)`
+      );
     } catch (e) {
       setErr(`Fehler beim Laden: ${e.message}`);
-      setItems([]);
+      setDraftItems([]);
     }
   }
 
-async function createBundle(p) {
-  setMsg(''); setErr('');
-  try {
-    const r = await fetch(`${GW}/api/tenants/${encodeURIComponent(orgId)}/bundles`, {
-      method: 'POST',
-      headers: { 'content-type':'application/json' }, // ggf. x-api-key hinzufügen
-      body: JSON.stringify({ title: p.title, processId: p.id })
-    });
-    const j = await r.json();
-    if (!r.ok || !j.ok) throw new Error(j.error || r.statusText);
-
-    setItems(prev =>
-      prev.map(x => x.id === p.id
-        ? { ...x, bundleId: j.bundleId, sspHref: j.sspHref }
-        : x
-      )
-    );
-    setMsg(`Bundle angelegt: ${j.bundleId}${j.prUrl ? ` (PR: ${j.prUrl})` : ''}`);
-  } catch (e) {
-    setErr(`Anlegen fehlgeschlagen: ${e.message}`);
-  }
-}
-
-async function loadDirectory(targetOrgId = orgId, ref) {
-  setErr('');
-  try {
-    const q = ref ? `?ref=${encodeURIComponent(ref)}` : '';
-    const r = await fetch(
-      `${GW}/api/tenants/${encodeURIComponent(targetOrgId)}/procedures${q}`
-    );
-    const j = await r.json();
-
-    if (!r.ok) {
-      throw new Error(j.detail || j.error || r.statusText);
-    }
-
-    // /procedures liefert { items: ["bundle-…", "bundle-…", ...] }
-    const rawItems = Array.isArray(j.items) ? j.items : [];
-
-    const list = rawItems.map(id => ({
-      id,
-      title: id, // später: schönerer Titel aus bundle.json
-      bundleId: id,
-      // API-Href zum jeweiligen SSP
-      sspHref: `${GW}/api/tenants/${encodeURIComponent(
-        targetOrgId
-      )}/procedures/${encodeURIComponent(id)}`
-    }));
-
-    setItems(list);
-    setMsg(`Verzeichnis geladen: ${list.length} Einträge für ${targetOrgId}`);
-  } catch (e) {
-    setItems([]);
-    setErr(`Fehler beim Laden des Verzeichnisses: ${e.message}`);
-  }
-}
-
-
-async function importAktenplan() {
+  // Minimal-SSP für einen Draft-Prozess anlegen und danach main aktualisieren
+  async function createDraftSsp(item) {
     setMsg('');
     setErr('');
     try {
-      if (!href.trim()) {
-        throw new Error('Bitte XDOMEA-URL angeben.');
-      }
+      if (!orgId) throw new Error('Keine Organisation gesetzt.');
+
+      const r = await fetch(
+        `${GW}/api/tenants/${encodeURIComponent(orgId)}/bundles`,
+        {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' }, // ggf. x-api-key hinzufügen
+          body: JSON.stringify({ title: item.title, processId: item.id })
+        }
+      );
+      const j = await r.json();
+      if (!r.ok || !j.ok) throw new Error(j.error || r.statusText);
+
+      // Draft-Item um sspHref/bundleId ergänzen
+      setDraftItems(prev =>
+        prev.map(x =>
+          x.id === item.id
+            ? { ...x, bundleId: j.bundleId, sspHref: j.sspHref }
+            : x
+        )
+      );
+
+      setMsg(
+        `SSP (Draft) angelegt: ${j.bundleId}${
+          j.prUrl ? ` (PR: ${j.prUrl})` : ''
+        }`
+      );
+
+      // RoPA main aktualisieren (Backend schreibt Prozess ins ropa.json auf main)
+      await loadMainRopa(orgId);
+    } catch (e) {
+      setErr(`Anlegen fehlgeschlagen: ${e.message}`);
+    }
+  }
+
+  // Aktenplan importieren → Draft-Liste aus created[]
+  async function importAktenplan() {
+    setMsg('');
+    setErr('');
+    setDraftItems([]);
+
+    try {
+      if (!orgId)
+        throw new Error('Bitte zuerst eine Organisation auswählen.');
+      if (!href.trim()) throw new Error('Bitte XDOMEA-URL angeben.');
 
       const ref = `feature/${orgId}`;
 
@@ -113,27 +148,34 @@ async function importAktenplan() {
         throw new Error(j.detail || j.error || r.statusText);
       }
 
-      const count = j.created?.length || 0;
-      setMsg(`Aktenplan importiert: ${count} Prozesse`);
-      setLastImportRef(ref);          // <--- merken, dass ein Draft existiert
+      const created = Array.isArray(j.created) ? j.created : [];
+      const draftList = created.map(c => ({
+        id: c.processId,
+        title: c.processId, // später schöner
+        sspHref: c.sspHref,
+        prUrl: c.prUrl || null
+      }));
 
-      await loadDirectory(orgId);
+      setDraftItems(draftList);
+      setLastImportRef(ref);
+      setMsg(`Aktenplan importiert: ${draftList.length} Prozesse (Draft)`);
     } catch (e) {
       setErr(`Fehler beim Import: ${e.message}`);
     }
-    await loadDirectory(orgId, ref);
   }
 
+  // Aktenplan-Branch mergen → danach main neu laden
   async function commitAktenplan() {
     setErr('');
     try {
       if (!lastImportRef) {
-        throw new Error('Kein importierter Aktenplan im Entwurf (Branch) vorhanden.');
+        throw new Error(
+          'Kein importierter Aktenplan im Entwurf (Branch) vorhanden.'
+        );
       }
 
       setMsg('Aktenplan wird übernommen …');
 
-      // ⚠️ Pfad ggf. an eure bestehende Merge-Route anpassen!
       const r = await fetch(
         `${GW}/api/tenants/${encodeURIComponent(
           orgId
@@ -149,15 +191,13 @@ async function importAktenplan() {
       }
 
       setMsg('Aktenplan übernommen (Branch gemerged).');
-      // optional: lastImportRef zurücksetzen, wenn alles im Main ist
+      // optional: Branch-Marker zurücksetzen
       // setLastImportRef('');
-      await loadDirectory(orgId);
+      await loadMainRopa(orgId);
     } catch (e) {
       setErr(`Fehler beim Übernehmen: ${e.message}`);
     }
-    await loadDirectory(orgId);
   }
-
 
   return (
     <div className="space-y-6">
@@ -165,8 +205,12 @@ async function importAktenplan() {
         <h1 className="text-2xl font-semibold">RoPA – Verzeichnis</h1>
         <div className="text-sm text-gray-600">
           Org:&nbsp;
-          <input value={orgId} onChange={e=>setOrgId(e.target.value)}
-                 className="font-mono border rounded px-2 py-1" style={{width: 320}}/>
+          <input
+            value={orgId}
+            onChange={e => setOrgId(e.target.value)}
+            className="font-mono border rounded px-2 py-1"
+            style={{ width: 320 }}
+          />
         </div>
       </div>
 
@@ -183,9 +227,10 @@ async function importAktenplan() {
         >
           Vorschau
         </button>
-        <button 
-          onClick={importAktenplan} 
-          className="rounded bg-blue-600 text-white px-4 py-2">
+        <button
+          onClick={importAktenplan}
+          className="rounded bg-blue-600 text-white px-4 py-2"
+        >
           Aktenplan laden
         </button>
         {lastImportRef && (
@@ -195,78 +240,104 @@ async function importAktenplan() {
           >
             Aktenplan übernehmen
           </button>
-          )}
+        )}
       </div>
 
       {msg && <div className="text-green-700 text-sm">{msg}</div>}
       {err && <div className="text-red-700 text-sm">{err}</div>}
 
-      <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-      {items.map(item => {
-        const procId = item.id || item.processId;
-        const title = item.title || procId;
-
-        function handleCreateNew() {
-          // TODO: Hier kannst du später z.B. ein Editor-Route ansteuern
-          setMsg(`Neuen SSP für Prozess "${title}" anlegen (TODO).`);
-        }
-
-        function handleCreateFromTemplate() {
-          // TODO: Hier könnt ihr "aus Vorlage" später verdrahten
-          setMsg(`SSP aus Vorlage für "${title}" anlegen (TODO).`);
-        }
-
-        return (
-          <div key={procId} className="rounded-lg border bg-white p-4">
-            <div className="text-xs text-gray-500">Process-ID: {procId}</div>
-            <h2 className="font-semibold">{title}</h2>
-
-            <div className="mt-3 flex flex-wrap gap-3 items-center">
-              {!item.sspHref ? (
-                <>
-                  <span className="text-xs text-gray-500">
-                    Noch kein SSP
-                  </span>
-                  <button
-                    onClick={() => createBundle(item)}
-                    className="rounded bg-emerald-600 text-white px-3 py-1.5 text-xs"
-                  >
-                    Anlegen
-                  </button>
-                  {/* „Aus Vorlage“ kannst du hier später anbinden */}
-                </>
-              ) : (
-                <>
-                  <Link
-                    to={`/ssp?org=${encodeURIComponent(
-                      orgId
-                    )}&bundle=${encodeURIComponent(item.bundleId || item.id)}`}
-                    className="text-blue-700 underline text-sm"
-                  >
-                    Öffnen
-                  </Link>
-                  <a
-                    href={item.sspHref}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-gray-700 underline text-sm"
-                  >
-                    RAW
-                  </a>
-                </>
-              )}
-            </div>
-
+      {/* Draft-Bereich (Preview/Import) */}
+      {draftItems.length > 0 && (
+        <section className="space-y-2">
+          <h2 className="text-lg font-semibold">
+            Entwurf – Aktenplan (Draft)
+          </h2>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {draftItems.map(item => (
+              <ProcessCard
+                key={`draft-${item.id}`}
+                item={item}
+                orgId={orgId}
+                variant="draft"
+                onCreateDraftSsp={createDraftSsp}
+              />
+            ))}
           </div>
-            );
-          })}
-      </div>
+        </section>
+      )}
 
+      {/* Main-RoPA nur, wenn orgId gesetzt ist */}
+      {orgId && (
+        <section className="space-y-2">
+          <h2 className="text-lg font-semibold">RoPA – Verzeichnis (Main)</h2>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {mainItems.map(item => (
+              <ProcessCard
+                key={`main-${item.id}`}
+                item={item}
+                orgId={orgId}
+                variant="main"
+              />
+            ))}
+          </div>
+        </section>
+      )}
 
       <p className="text-xs text-gray-500">
-        Tipp: Für einen schnellen Test kannst du die bereitgestellte JSON-Probe nutzen (XDOMEA→JSON). Sie bildet die
-        Bezeichnungen aus dem Aktenplan ab und erzeugt RoPA-Karten daraus. 
+        Tipp: Für einen schnellen Test kannst du die bereitgestellte JSON-Probe
+        nutzen (XDOMEA→JSON). Sie bildet die Bezeichnungen aus dem Aktenplan ab
+        und erzeugt RoPA-Karten daraus.
       </p>
+    </div>
+  );
+}
+
+// gemeinsame Karte für Draft/Main
+function ProcessCard({ item, orgId, variant, onCreateDraftSsp }) {
+  const hasSsp = !!item.sspHref;
+
+  return (
+    <div className="rounded-lg border bg-white p-4">
+      <div className="text-xs text-gray-500">Process-ID: {item.id}</div>
+      <h3 className="font-semibold">{item.title || item.id}</h3>
+
+      <div className="mt-3 flex flex-wrap gap-2 items-center">
+        {hasSsp ? (
+          <>
+            <Link
+              to={`/ssp?org=${encodeURIComponent(
+                orgId
+              )}&bundle=${encodeURIComponent(
+                item.bundleId || item.id.startsWith('bundle-')
+                  ? item.id
+                  : `bundle-${item.id}`
+              )}`}
+              className="text-blue-700 underline text-sm"
+            >
+              Öffnen
+            </Link>
+            <a
+              href={item.sspHref}
+              target="_blank"
+              rel="noreferrer"
+              className="text-gray-700 underline text-sm"
+            >
+              RAW
+            </a>
+          </>
+        ) : (
+          <span className="text-xs text-gray-500">Noch kein SSP</span>
+        )}
+
+        {variant === 'draft' && !hasSsp && onCreateDraftSsp && (
+          <button
+            onClick={() => onCreateDraftSsp(item)}
+            className="border rounded px-2 py-1 text-xs"
+          >
+            SSP anlegen (Draft)
+          </button>
+        )}
+      </div>
     </div>
   );
 }
