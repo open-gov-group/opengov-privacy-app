@@ -157,7 +157,15 @@ async function importAktenplan() {
           value={href}
           onChange={e => setHref(e.target.value)}
         />
-        <button onClick={loadPreview} className="rounded bg-blue-600 text-white px-4 py-2">
+        <button
+          onClick={loadPreview}
+          className="rounded border border-gray-400 text-gray-700 px-4 py-2"
+        >
+          Vorschau
+        </button>
+        <button 
+          onClick={importAktenplan} 
+          lassName="rounded bg-blue-600 text-white px-4 py-2">
           Aktenplan laden
         </button>
         {lastImportRef && (
@@ -174,67 +182,67 @@ async function importAktenplan() {
       {err && <div className="text-red-700 text-sm">{err}</div>}
 
       <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-{items.map(item => {
-  const procId = item.id || item.processId;
-  const title = item.title || procId;
+      {items.map(item => {
+        const procId = item.id || item.processId;
+        const title = item.title || procId;
 
-  function handleCreateNew() {
-    // TODO: Hier kannst du später z.B. ein Editor-Route ansteuern
-    setMsg(`Neuen SSP für Prozess "${title}" anlegen (TODO).`);
-  }
+        function handleCreateNew() {
+          // TODO: Hier kannst du später z.B. ein Editor-Route ansteuern
+          setMsg(`Neuen SSP für Prozess "${title}" anlegen (TODO).`);
+        }
 
-  function handleCreateFromTemplate() {
-    // TODO: Hier könnt ihr "aus Vorlage" später verdrahten
-    setMsg(`SSP aus Vorlage für "${title}" anlegen (TODO).`);
-  }
+        function handleCreateFromTemplate() {
+          // TODO: Hier könnt ihr "aus Vorlage" später verdrahten
+          setMsg(`SSP aus Vorlage für "${title}" anlegen (TODO).`);
+        }
 
-  return (
-    <div key={procId} className="rounded-lg border bg-white p-4">
-      <div className="text-xs text-gray-500">Process-ID: {procId}</div>
-      <h2 className="font-semibold">{title}</h2>
+        return (
+          <div key={procId} className="rounded-lg border bg-white p-4">
+            <div className="text-xs text-gray-500">Process-ID: {procId}</div>
+            <h2 className="font-semibold">{title}</h2>
 
-      <div className="mt-3 flex flex-wrap gap-2 items-center">
-        {item.sspHref ? (
-          <>
-            <Link
-              to={`/ssp?org=${encodeURIComponent(
-                orgId
-              )}&proc=${encodeURIComponent(procId)}`}
-              className="text-blue-700 underline text-sm"
-            >
-              Öffnen
-            </Link>
-            <a
-              href={item.sspHref}
-              target="_blank"
-              rel="noreferrer"
-              className="text-gray-700 underline text-sm"
-            >
-              RAW
-            </a>
-          </>
-        ) : (
-          <span className="text-xs text-gray-500 flex-1">
-            Noch kein SSP verfügbar
-          </span>
-        )}
+            <div className="mt-3 flex flex-wrap gap-2 items-center">
+              {item.sspHref ? (
+                <>
+                  <Link
+                    to={`/ssp?org=${encodeURIComponent(
+                      orgId
+                    )}&proc=${encodeURIComponent(procId)}`}
+                    className="text-blue-700 underline text-sm"
+                  >
+                    Öffnen
+                  </Link>
+                  <a
+                    href={item.sspHref}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-gray-700 underline text-sm"
+                  >
+                    RAW
+                  </a>
+                </>
+              ) : (
+                <span className="text-xs text-gray-500 flex-1">
+                  Noch kein SSP verfügbar
+                </span>
+              )}
 
-        <button
-          onClick={handleCreateNew}
-          className="border rounded px-2 py-1 text-xs"
-        >
-          Anlegen
-        </button>
-        <button
-          onClick={handleCreateFromTemplate}
-          className="border rounded px-2 py-1 text-xs"
-        >
-          Aus Vorlage
-        </button>
-      </div>
-    </div>
-      );
-    })}
+              <button
+                onClick={handleCreateNew}
+                className="border rounded px-2 py-1 text-xs"
+              >
+                Anlegen
+              </button>
+              <button
+                onClick={handleCreateFromTemplate}
+                className="border rounded px-2 py-1 text-xs"
+              >
+                Aus Vorlage
+              </button>
+            </div>
+          </div>
+            );
+          })}
       </div>
 
 
