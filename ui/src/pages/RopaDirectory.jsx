@@ -57,22 +57,26 @@ async function loadDirectory(targetOrgId = orgId) {
   setErr('');
   try {
     const r = await fetch(
-      `${GW}/api/tenants/${encodeURIComponent(targetOrgId)}/ropa`
+      `${GW}/api/tenants/${encodeURIComponent(targetOrgId)}/procedures`
     );
     const j = await r.json();
 
-    // WICHTIG: hier nur r.ok prüfen, NICHT j.ok
     if (!r.ok) {
       throw new Error(j.detail || j.error || r.statusText);
     }
 
-    // Gateway liefert { items: [ "proc-1", "proc-2", ... ] }
+    // /procedures liefert { items: ["bundle-…", "bundle-…", ...] }
     const rawItems = Array.isArray(j.items) ? j.items : [];
 
-    // In Karten brauchen wir {id, title}
-    const list = rawItems.map(x =>
-      typeof x === 'string' ? { id: x, title: x } : x
-    );
+    const list = rawItems.map(id => ({
+      id,
+      title: id, // später: schönerer Titel aus bundle.json
+      bundleId: id,
+      // API-Href zum jeweiligen SSP
+      sspHref: `${GW}/api/tenants/${encodeURIComponent(
+        targetOrgId
+      )}/procedures/${encodeURIComponent(id)}`
+    }));
 
     setItems(list);
     setMsg(`Verzeichnis geladen: ${list.length} Einträge für ${targetOrgId}`);
@@ -81,6 +85,7 @@ async function loadDirectory(targetOrgId = orgId) {
     setErr(`Fehler beim Laden des Verzeichnisses: ${e.message}`);
   }
 }
+
 
 
   
@@ -217,7 +222,7 @@ async function importAktenplan() {
             <h2 className="font-semibold">{title}</h2>
 
             <div className="mt-3 flex flex-wrap gap-3 items-center">
-              {!item.bundleId ? (
+              {!item.sspHref ? (
                 <>
                   <span className="text-xs text-gray-500">
                     Noch kein SSP
@@ -228,23 +233,20 @@ async function importAktenplan() {
                   >
                     Anlegen
                   </button>
-                  <button
-                    onClick={() => createFromTemplate(item)} // TODO: später implementieren
-                    className="rounded border px-3 py-1.5 text-xs"
-                  >
-                    Aus Vorlage
-                  </button>
+                  {/* „Aus Vorlage“ kannst du hier später anbinden */}
                 </>
               ) : (
                 <>
                   <Link
-                    to={`/ssp?org=${encodeURIComponent(orgId)}&bundle=${encodeURIComponent(item.bundleId)}`}
+                    to={`/ssp?org=${encodeURIComponent(
+                      orgId
+                    )}&bundle=${encodeURIComponent(item.bundleId || item.id)}`}
                     className="text-blue-700 underline text-sm"
                   >
                     Öffnen
                   </Link>
                   <a
-                    href={item.sspHref || `${GW}/api/tenants/${encodeURIComponent(orgId)}/procedures/${encodeURIComponent(item.bundleId)}`}
+                    href={item.sspHref}
                     target="_blank"
                     rel="noreferrer"
                     className="text-gray-700 underline text-sm"
