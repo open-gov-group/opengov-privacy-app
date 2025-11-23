@@ -165,7 +165,7 @@ async function importAktenplan() {
         </button>
         <button 
           onClick={importAktenplan} 
-          lassName="rounded bg-blue-600 text-white px-4 py-2">
+          className="rounded bg-blue-600 text-white px-4 py-2">
           Aktenplan laden
         </button>
         {lastImportRef && (
