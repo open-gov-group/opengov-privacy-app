@@ -19,8 +19,6 @@ import '../index.css'
 const dig = (o, p, d=undefined) => p.split(".").reduce((a,k)=> (a&&k in a?a[k]:undefined), o) ?? d;
 const API_BASE = import.meta.env.VITE_API_BASE;
 
-
-
 export default function SspEditor() {
 
   const PROFILES = [
@@ -115,8 +113,6 @@ export default function SspEditor() {
     if (pid) setPortfolioId(pid);
   }, []);
 
-
-
   useEffect(() => {
      const qp = new URLSearchParams(location.search)
      const s = qp.get('ssp')
@@ -166,8 +162,6 @@ export default function SspEditor() {
       setErr(`Fehler beim Laden des Portfolios\n\n${e?.message || e}`);
     }
   }
-
-
 
   useEffect(() => {
     if (profileHref) localStorage.setItem(LS_PROFILE, profileHref);
@@ -257,8 +251,6 @@ export default function SspEditor() {
       ir['implemented-requirements'];
     setSsp(next);
   };
-
-
 
   const fetchJson = async (u) => {
     const r = await fetch(u, { cache: "no-store" });
@@ -417,7 +409,6 @@ export default function SspEditor() {
        setError(`Fehler beim Laden\n\n${e?.message || e}`)
      }
    }
-
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white p-6">
@@ -607,6 +598,7 @@ export default function SspEditor() {
         <Tabs defaultValue="ssp">
           <TabsList className="mb-3">
             <TabsTrigger value="ssp">SSP</TabsTrigger>
+            <TabsTrigger value="measures">Measures</TabsTrigger>
             <TabsTrigger value="ifg">IFG-Ansicht</TabsTrigger>
             <TabsTrigger value="poam">POA&M</TabsTrigger>
             <TabsTrigger value="evidence">Evidence Uploader</TabsTrigger>
@@ -697,6 +689,21 @@ export default function SspEditor() {
               </CardContent>
             </Card>
           </TabsContent>
+
+          <TabsContent value="measures">
+            <Card className="shadow-sm">
+              <CardContent className="p-5 space-y-4">
+                {!ssp ? (
+                  <div className="text-slate-500 text-sm">
+                    Load an SSP JSON to view measures.
+                  </div>
+                ) : (
+                  <MeasuresByProcess components={components} implReqs={implReqs} />
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
           <TabsContent value="ifg">
             <Card className="shadow-sm">
               <CardContent className="p-5 space-y-4">
@@ -704,6 +711,7 @@ export default function SspEditor() {
               </CardContent>
             </Card>
           </TabsContent>
+
           <TabsContent value="poam">
             {poam && (
               <div className="mb-3">
@@ -867,6 +875,147 @@ function InfoTile({ title, value, subtitle }) {
   );
 }
 
+function MeasuresByProcess({ components, implReqs }) {
+  if (!components || components.length === 0) {
+    return (
+      <div className="text-slate-500 text-sm">
+        Keine Komponenten im SSP gefunden.
+      </div>
+    );
+  }
+
+  const getPropsArray = (obj) => {
+    const raw = obj && obj.props && obj.props.prop;
+    return Array.isArray(raw) ? raw : raw ? [raw] : [];
+  };
+
+  const processComponents = components.filter((c) => c.type === "process");
+
+  if (processComponents.length === 0) {
+    return (
+      <div className="text-slate-500 text-sm">
+        Keine Prozess-Komponenten im SSP gefunden.
+      </div>
+    );
+  }
+
+  const measuresByComponent = new Map();
+
+  for (const ir of implReqs || []) {
+    const propsArr = getPropsArray(ir);
+    const tomProp = propsArr.find((p) => p.name === "tom");
+    const sdmProp = propsArr.find((p) => p.name === "sdm-measure-id");
+    const bsiProp = propsArr.find((p) => p.name === "bsi-stand-der-technik-id");
+    const gdprProp = propsArr.find((p) => p.name === "gdpr-reference");
+
+    const meta = {
+      controlId: ir["control-id"],
+      tom: tomProp?.value || null,
+      sdmMeasure: sdmProp?.value || null,
+      bsiId: bsiProp?.value || null,
+      gdpr: gdprProp?.value || null,
+    };
+
+    for (const s of ir.statements || []) {
+      const byComps = s["by-components"] || [];
+      const list = Array.isArray(byComps) ? byComps : [byComps];
+      for (const bc of list) {
+        if (!bc || !bc["component-uuid"]) continue;
+        const cid = bc["component-uuid"];
+        const arr = measuresByComponent.get(cid) || [];
+        arr.push({
+          ...meta,
+          statementId: s["statement-id"],
+          description: bc.description || s.description || "",
+        });
+        measuresByComponent.set(cid, arr);
+      }
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      {processComponents.map((proc) => {
+        const procMeasures = measuresByComponent.get(proc.uuid) || [];
+        const procProps = getPropsArray(proc);
+        const procTitle =
+          proc.title ||
+          procProps.find((p) => p.name === "procedure-title")?.value ||
+          proc.uuid;
+
+        return (
+          <Card key={proc.uuid}>
+            <CardContent className="p-4 space-y-3">
+              <div className="flex items-center justify-between gap-2">
+                <div>
+                  <div className="text-sm text-slate-500">Prozess</div>
+                  <div className="text-lg font-semibold">{procTitle}</div>
+                  <div className="text-xs text-slate-400 font-mono">
+                    {proc.uuid}
+                  </div>
+                </div>
+                <Badge variant="outline">
+                  {procMeasures.length} Maßnahme
+                  {procMeasures.length === 1 ? "" : "n"}
+                </Badge>
+              </div>
+
+              {proc.description && (
+                <p className="text-sm text-slate-600">{proc.description}</p>
+              )}
+
+              {procMeasures.length === 0 ? (
+                <div className="text-xs text-slate-400">
+                  Für diesen Prozess sind in den Implemented Requirements derzeit
+                  keine SDM-/TOM-/BSI-Mappings hinterlegt.
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {procMeasures.map((m, idx) => (
+                    <div
+                      key={idx}
+                      className="border rounded-xl p-3 text-sm space-y-1"
+                    >
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge variant="secondary">{m.controlId}</Badge>
+                        {m.tom && (
+                          <Badge variant="outline">TOM: {m.tom}</Badge>
+                        )}
+                        {m.sdmMeasure && (
+                          <Badge variant="outline">
+                            SDM: {m.sdmMeasure}
+                          </Badge>
+                        )}
+                        {m.bsiId && (
+                          <Badge variant="outline">
+                            BSI SdT: {m.bsiId}
+                          </Badge>
+                        )}
+                        {m.gdpr && (
+                          <span className="text-xs text-slate-500">
+                            {m.gdpr}
+                          </span>
+                        )}
+                      </div>
+                      {m.description ? (
+                        <div className="text-slate-700">{m.description}</div>
+                      ) : (
+                        <div className="text-xs text-slate-400">
+                          Keine Detailbeschreibung hinterlegt.
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        );
+      })}
+    </div>
+  );
+}
+
 function IfgView({ ssp, implReqs }) {
   if (!ssp) {
     return <div className="text-slate-500 text-sm">Kein SSP geladen.</div>;
@@ -909,17 +1058,15 @@ function IfgView({ ssp, implReqs }) {
   };
 
   // TOMs: implemented-requirements, die ein tom-Prop haben
-// TOMs: implemented-requirements, die ein tom-Prop haben
-const tomReqs = (implReqs || []).filter((ir) => {
-  const rawProp = ir.props && ir.props.prop;
-  const propsArr = Array.isArray(rawProp)
-    ? rawProp
-    : rawProp
-    ? [rawProp]
-    : [];
-  return propsArr.some((p) => p && p.name === "tom");
-});
-
+  const tomReqs = (implReqs || []).filter((ir) => {
+    const rawProp = ir.props && ir.props.prop;
+    const propsArr = Array.isArray(rawProp)
+      ? rawProp
+      : rawProp
+      ? [rawProp]
+      : [];
+    return propsArr.some((p) => p && p.name === "tom");
+  });
 
   return (
     <div className="space-y-4">
@@ -1018,7 +1165,6 @@ const tomReqs = (implReqs || []).filter((ir) => {
               return { tomName, desc };
             })
             .filter((t) => t.tomName);
-
 
           return (
             <div
@@ -1355,4 +1501,3 @@ const tomReqs = (implReqs || []).filter((ir) => {
     </div>
   );
 }
-
